@@ -3,9 +3,9 @@ import { View, Text, ScrollView, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import WeekDaySelector from "../components/WeekDaySelector";
 import LectureTimelineCard from "../components/LectureTimelineCard";
-import { getLecturesForDate } from "../data/scheduleData";
 import { getOngoingOrNextLecture } from "../utils/attendance";
 import { useAttendance } from "../context/AttendanceContext";
+import { useSchedule } from "../context/ScheduleContext";
 import { AttendanceStatus, Lecture } from "../data/types";
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -21,6 +21,7 @@ function dateKey(d: Date): string {
 
 export default function TodayScreen() {
   const { statusOverrides, extraClasses, setStatus } = useAttendance();
+  const { getLecturesForDate } = useSchedule();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [weekOffset, setWeekOffset] = useState(0);
 
@@ -41,6 +42,7 @@ export default function TodayScreen() {
     selectedDate.getDate(),
     statusOverrides,
     extraClasses,
+    getLecturesForDate,
   ]);
 
   const currentLecture = isToday ? getOngoingOrNextLecture(lectures) : null;

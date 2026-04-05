@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const KEYS = {
   PROFILE: "@attendify:profile",
   SUBJECTS: "@attendify:subjects",
+  SCHEDULE: "@attendify:schedule",
   ATTENDANCE: "@attendify:attendance",
   EXTRA_CLASSES: "@attendify:extra_classes",
 } as const;

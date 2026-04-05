@@ -1,0 +1,66 @@
+{
+  "version": "1",
+  "subjects": [
+    { "id": "sub-1", "name": "Data Structures", "code": "CS201", "totalClasses": 42, "attendedClasses": 38 },
+    { "id": "sub-2", "name": "Operating Systems", "code": "CS301", "totalClasses": 40, "attendedClasses": 34 },
+    { "id": "sub-3", "name": "Database Management", "code": "CS302", "totalClasses": 38, "attendedClasses": 28 },
+    { "id": "sub-4", "name": "Computer Networks", "code": "CS303", "totalClasses": 36, "attendedClasses": 32 },
+    { "id": "sub-5", "name": "Software Engineering", "code": "CS304", "totalClasses": 35, "attendedClasses": 24 },
+    { "id": "sub-6", "name": "Mathematics III", "code": "MA201", "totalClasses": 44, "attendedClasses": 40 }
+  ],
+  "schedule": {
+    "0": [
+      { "subjectId": "sub-6", "subjectName": "Mathematics III", "startTime": "09:00", "endTime": "10:00", "room": "Room 108", "professor": "Dr. Priya Iyer", "topic": "Differential Equations" },
+      { "subjectId": "sub-4", "subjectName": "Computer Networks", "startTime": "10:15", "endTime": "11:15", "room": "Room 405", "professor": "Prof. Neha Gupta", "topic": "Subnetting & VLSM" },
+      { "subjectId": "sub-5", "subjectName": "Software Engineering", "startTime": "11:30", "endTime": "12:30", "room": "Room 301", "professor": "Dr. Sanjay Verma", "topic": "Project Management" },
+      { "subjectId": "sub-1", "subjectName": "Data Structures", "startTime": "15:00", "endTime": "16:00", "room": "Room 301", "professor": "Dr. Rahul Mehta", "topic": "Tries & Suffix Arrays" },
+      { "subjectId": "sub-2", "subjectName": "Operating Systems", "startTime": "17:00", "endTime": "18:00", "room": "Room 204", "professor": "Prof. Anita Sharma", "topic": "Kernel Architecture" }
+    ],
+    "1": [
+      { "subjectId": "sub-1", "subjectName": "Data Structures", "startTime": "09:00", "endTime": "10:00", "room": "Room 301", "professor": "Dr. Rahul Mehta", "topic": "AVL Trees & Rotations" },
+      { "subjectId": "sub-2", "subjectName": "Operating Systems", "startTime": "10:15", "endTime": "11:15", "room": "Room 204", "professor": "Prof. Anita Sharma", "topic": "Process Scheduling" },
+      { "subjectId": "sub-3", "subjectName": "Database Management", "startTime": "11:30", "endTime": "12:30", "room": "Lab 102", "professor": "Dr. Vikram Patel", "topic": "Normalization & 3NF" },
+      { "subjectId": "sub-5", "subjectName": "Software Engineering", "startTime": "14:00", "endTime": "15:00", "room": "Room 301", "professor": "Dr. Sanjay Verma", "topic": "Agile Methodologies" },
+      { "subjectId": "sub-6", "subjectName": "Mathematics III", "startTime": "15:15", "endTime": "16:15", "room": "Room 108", "professor": "Dr. Priya Iyer", "topic": "Vector Calculus" },
+      { "subjectId": "sub-4", "subjectName": "Computer Networks", "startTime": "17:00", "endTime": "18:00", "room": "Room 405", "professor": "Prof. Neha Gupta", "topic": "OSI Model Deep Dive" }
+    ],
+    "2": [
+      { "subjectId": "sub-4", "subjectName": "Computer Networks", "startTime": "09:00", "endTime": "10:00", "room": "Room 405", "professor": "Prof. Neha Gupta", "topic": "TCP/IP Protocol Suite" },
+      { "subjectId": "sub-6", "subjectName": "Mathematics III", "startTime": "10:15", "endTime": "11:15", "room": "Room 108", "professor": "Dr. Priya Iyer", "topic": "Laplace Transforms" },
+      { "subjectId": "sub-1", "subjectName": "Data Structures", "startTime": "11:30", "endTime": "12:30", "room": "Lab 201", "professor": "Dr. Rahul Mehta", "topic": "Graph Traversals" },
+      { "subjectId": "sub-2", "subjectName": "Operating Systems", "startTime": "14:00", "endTime": "15:00", "room": "Room 204", "professor": "Prof. Anita Sharma", "topic": "Memory Management" },
+      { "subjectId": "sub-3", "subjectName": "Database Management", "startTime": "16:30", "endTime": "17:30", "room": "Lab 102", "professor": "Dr. Vikram Patel", "topic": "Stored Procedures" },
+      { "subjectId": "sub-5", "subjectName": "Software Engineering", "startTime": "17:45", "endTime": "18:45", "room": "Room 301", "professor": "Dr. Sanjay Verma", "topic": "CI/CD Pipelines" }
+    ],
+    "3": [
+      { "subjectId": "sub-3", "subjectName": "Database Management", "startTime": "09:00", "endTime": "10:00", "room": "Lab 102", "professor": "Dr. Vikram Patel", "topic": "SQL Joins & Subqueries" },
+      { "subjectId": "sub-5", "subjectName": "Software Engineering", "startTime": "10:15", "endTime": "11:15", "room": "Room 301", "professor": "Dr. Sanjay Verma", "topic": "Design Patterns" },
+      { "subjectId": "sub-6", "subjectName": "Mathematics III", "startTime": "11:30", "endTime": "12:30", "room": "Room 108", "professor": "Dr. Priya Iyer", "topic": "Fourier Series" },
+      { "subjectId": "sub-4", "subjectName": "Computer Networks", "startTime": "14:00", "endTime": "15:00", "room": "Room 405", "professor": "Prof. Neha Gupta", "topic": "Routing Algorithms" },
+      { "subjectId": "sub-1", "subjectName": "Data Structures", "startTime": "15:15", "endTime": "16:15", "room": "Lab 201", "professor": "Dr. Rahul Mehta", "topic": "Segment Trees" },
+      { "subjectId": "sub-2", "subjectName": "Operating Systems", "startTime": "17:30", "endTime": "18:30", "room": "Room 204", "professor": "Prof. Anita Sharma", "topic": "Virtual Memory" }
+    ],
+    "4": [
+      { "subjectId": "sub-1", "subjectName": "Data Structures", "startTime": "09:00", "endTime": "10:00", "room": "Room 301", "professor": "Dr. Rahul Mehta", "topic": "Dynamic Programming" },
+      { "subjectId": "sub-2", "subjectName": "Operating Systems", "startTime": "10:15", "endTime": "11:15", "room": "Room 204", "professor": "Prof. Anita Sharma", "topic": "Deadlock Detection" },
+      { "subjectId": "sub-3", "subjectName": "Database Management", "startTime": "11:30", "endTime": "12:30", "room": "Lab 102", "professor": "Dr. Vikram Patel", "topic": "Transaction Management" },
+      { "subjectId": "sub-5", "subjectName": "Software Engineering", "startTime": "15:15", "endTime": "16:15", "room": "Room 301", "professor": "Dr. Sanjay Verma", "topic": "Testing Strategies" },
+      { "subjectId": "sub-6", "subjectName": "Mathematics III", "startTime": "16:30", "endTime": "17:30", "room": "Room 108", "professor": "Dr. Priya Iyer", "topic": "Numerical Methods" },
+      { "subjectId": "sub-4", "subjectName": "Computer Networks", "startTime": "18:00", "endTime": "19:00", "room": "Room 405", "professor": "Prof. Neha Gupta", "topic": "Wireless Networks" }
+    ],
+    "5": [
+      { "subjectId": "sub-4", "subjectName": "Computer Networks", "startTime": "09:00", "endTime": "10:00", "room": "Room 405", "professor": "Prof. Neha Gupta", "topic": "Network Security" },
+      { "subjectId": "sub-6", "subjectName": "Mathematics III", "startTime": "10:15", "endTime": "11:15", "room": "Room 108", "professor": "Dr. Priya Iyer", "topic": "Z-Transforms" },
+      { "subjectId": "sub-1", "subjectName": "Data Structures", "startTime": "11:30", "endTime": "12:30", "room": "Room 301", "professor": "Dr. Rahul Mehta", "topic": "Heap & Priority Queue" },
+      { "subjectId": "sub-2", "subjectName": "Operating Systems", "startTime": "14:00", "endTime": "15:00", "room": "Room 204", "professor": "Prof. Anita Sharma", "topic": "I/O Systems" },
+      { "subjectId": "sub-3", "subjectName": "Database Management", "startTime": "17:00", "endTime": "18:00", "room": "Lab 102", "professor": "Dr. Vikram Patel", "topic": "Query Optimization" }
+    ],
+    "6": [
+      { "subjectId": "sub-2", "subjectName": "Operating Systems", "startTime": "09:00", "endTime": "10:00", "room": "Room 204", "professor": "Prof. Anita Sharma", "topic": "File Systems" },
+      { "subjectId": "sub-3", "subjectName": "Database Management", "startTime": "10:15", "endTime": "11:15", "room": "Lab 102", "professor": "Dr. Vikram Patel", "topic": "Indexing & Hashing" },
+      { "subjectId": "sub-5", "subjectName": "Software Engineering", "startTime": "11:30", "endTime": "12:30", "room": "Room 301", "professor": "Dr. Sanjay Verma", "topic": "UML Diagrams" },
+      { "subjectId": "sub-1", "subjectName": "Data Structures", "startTime": "14:00", "endTime": "15:00", "room": "Lab 201", "professor": "Dr. Rahul Mehta", "topic": "String Algorithms" },
+      { "subjectId": "sub-6", "subjectName": "Mathematics III", "startTime": "16:00", "endTime": "17:00", "room": "Room 108", "professor": "Dr. Priya Iyer", "topic": "Probability & Statistics" }
+    ]
+  }
+}

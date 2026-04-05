@@ -11,11 +11,13 @@ const DEFAULT_PROFILE: UserProfile = {
 interface ProfileContextValue {
   profile: UserProfile;
   updateProfile: (patch: Partial<UserProfile>) => void;
+  resetProfile: () => void;
 }
 
 const ProfileContext = createContext<ProfileContextValue>({
   profile: DEFAULT_PROFILE,
   updateProfile: () => {},
+  resetProfile: () => {},
 });
 
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
@@ -35,8 +37,13 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     });
   }
 
+  function resetProfile() {
+    setProfile(DEFAULT_PROFILE);
+    Storage.set(Storage.KEYS.PROFILE, DEFAULT_PROFILE);
+  }
+
   return (
-    <ProfileContext.Provider value={{ profile, updateProfile }}>
+    <ProfileContext.Provider value={{ profile, updateProfile, resetProfile }}>
       {children}
     </ProfileContext.Provider>
   );

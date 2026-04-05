@@ -35,7 +35,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   const [name, setName] = useState("");
   const [minAttendance, setMinAttendance] = useState(75);
   const [pin, setPin] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [radius, setRadius] = useState(150);
+  const [radius, setRadius] = useState(50);
   const [locating, setLocating] = useState(false);
 
   function goToSetup() {
@@ -222,9 +222,9 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
                   </View>
                   <Slider
                     style={{ width: "100%", height: 32 }}
-                    minimumValue={50}
-                    maximumValue={500}
-                    step={10}
+                    minimumValue={10}
+                    maximumValue={100}
+                    step={5}
                     value={radius}
                     onValueChange={setRadius}
                     minimumTrackTintColor="#4dc591"

@@ -38,16 +38,24 @@ export default function LocationSetupScreen({
   const [pin, setPin] = useState<{ latitude: number; longitude: number } | null>(
     initialLocation ? { latitude: initialLocation.latitude, longitude: initialLocation.longitude } : null
   );
-  const [radius, setRadius] = useState(initialLocation?.radius ?? 150);
+  const [radius, setRadius] = useState(initialLocation?.radius ?? 50);
   const [locating, setLocating] = useState(false);
 
   useEffect(() => {
-    if (visible && initialLocation) {
+    if (!visible) return;
+    if (initialLocation) {
       setPin({ latitude: initialLocation.latitude, longitude: initialLocation.longitude });
       setRadius(initialLocation.radius);
-    } else if (visible && !initialLocation) {
+      mapRef.current?.animateToRegion({
+        latitude: initialLocation.latitude,
+        longitude: initialLocation.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }, 600);
+    } else {
       setPin(null);
-      setRadius(150);
+      setRadius(50);
+      handleUseMyLocation();
     }
   }, [visible]);
 
@@ -180,8 +188,8 @@ export default function LocationSetupScreen({
 
           <Slider
             style={{ width: "100%", height: 36 }}
-            minimumValue={50}
-            maximumValue={500}
+            minimumValue={10}
+            maximumValue={100}
             step={10}
             value={radius}
             onValueChange={setRadius}

@@ -5,13 +5,13 @@ import { Plus } from "lucide-react-native";
 import { useProfile } from "../context/ProfileContext";
 import { useSubjects } from "../context/SubjectsContext";
 import { useAttendance } from "../context/AttendanceContext";
+import { useSchedule } from "../context/ScheduleContext";
 import HeroCard from "../components/HeroCard";
 import OngoingLectureCard from "../components/OngoingLectureCard";
 import SubjectCard from "../components/SubjectCard";
 import AddSubjectScreen from "./AddSubjectScreen";
 import EditSubjectModal from "../components/EditSubjectModal";
 import BunkCalculator from "../components/BunkCalculator";
-import { getLecturesForDate } from "../data/scheduleData";
 import {
   getTodayAttendancePercentage,
   getTodayProgress,
@@ -22,10 +22,10 @@ import { AttendanceStatus, Lecture, Subject } from "../data/types";
 
 function getGreeting(): { text: string; emoji: string } {
   const hour = new Date().getHours();
-  if (hour < 12) return { text: "Good morning,", emoji: "🌅" };
+  if (hour < 12) return { text: "Good morning,", emoji: "🍵" };
   if (hour < 17) return { text: "Good afternoon,", emoji: "☀️" };
-  if (hour < 21) return { text: "Good evening,", emoji: "🌆" };
-  return { text: "Burning midnight oil,", emoji: "🌙" };
+  if (hour < 21) return { text: "Good evening,", emoji: "🍁" };
+  return { text: "Day wrapped up,", emoji: "🌙" };
 }
 
 function dateKey(d: Date): string {
@@ -36,6 +36,7 @@ export default function DashboardScreen() {
   const { profile } = useProfile();
   const { subjects, addSubject, updateSubject, deleteSubject } = useSubjects();
   const { statusOverrides, extraClasses, setStatus } = useAttendance();
+  const { getLecturesForDate } = useSchedule();
   const { text: greetingText, emoji } = getGreeting();
   const [showAddSubject, setShowAddSubject] = useState(false);
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
@@ -50,7 +51,7 @@ export default function DashboardScreen() {
       const key = `${dk}:${l.id}`;
       return key in statusOverrides ? { ...l, status: statusOverrides[key] } : l;
     });
-  }, [dk, statusOverrides, extraClasses]);
+  }, [dk, statusOverrides, extraClasses, getLecturesForDate]);
 
   const todayPercentage = useMemo(() => getTodayAttendancePercentage(lectures), [lectures]);
   const { attended, total } = useMemo(() => getTodayProgress(lectures), [lectures]);
@@ -105,11 +106,17 @@ export default function DashboardScreen() {
             className="bg-white rounded-3xl p-4 mx-4 mt-5"
             style={{ borderWidth: 1, borderStyle: "dashed", borderColor: "#e5e5e5" }}
           >
-            <View className="flex-row items-center justify-between mb-2">
-              <Text className="text-text-secondary text-sm font-medium">No More Lectures</Text>
-            </View>
-            <Text className="text-text text-lg font-bold mb-2">All done for today</Text>
-            <Text className="text-text-muted text-xs">You're free for the rest of the day 🎉</Text>
+            <Text className="text-text-secondary text-sm font-medium mb-1">
+              {lectures.length === 0 ? "No schedule set up" : "No More Lectures"}
+            </Text>
+            <Text className="text-text text-lg font-bold mb-1">
+              {lectures.length === 0 ? "Nothing here yet" : "All done for today"}
+            </Text>
+            <Text className="text-text-muted text-xs">
+              {lectures.length === 0
+                ? "Import your timetable from Settings to get started"
+                : "You're free for the rest of the day 🎉"}
+            </Text>
           </View>
         )}
 
@@ -125,24 +132,31 @@ export default function DashboardScreen() {
               <Plus size={16} color="#4dc591" />
             </TouchableOpacity>
           </View>
-          <FlatList
-            data={subjects}
-            keyExtractor={(item) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}
-            scrollEnabled
-            renderItem={({ item: subject }) => (
-              <SubjectCard
-                name={subject.name}
-                code={subject.code}
-                percentage={getAttendancePercentage(subject)}
-                attended={subject.attendedClasses}
-                total={subject.totalClasses}
-                onEdit={() => setEditingSubject(subject)}
-              />
-            )}
-          />
+          {subjects.length === 0 ? (
+            <View className="mx-4 px-4 py-5 bg-white rounded-3xl border border-dashed border-neutral-200 items-center">
+              <Text className="text-text-muted text-sm">No subjects yet</Text>
+              <Text className="text-text-muted text-xs mt-1">Tap + to add your first subject</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={subjects}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}
+              scrollEnabled
+              renderItem={({ item: subject }) => (
+                <SubjectCard
+                  name={subject.name}
+                  code={subject.code}
+                  percentage={getAttendancePercentage(subject)}
+                  attended={subject.attendedClasses}
+                  total={subject.totalClasses}
+                  onEdit={() => setEditingSubject(subject)}
+                />
+              )}
+            />
+          )}
         </View>
       </ScrollView>
 

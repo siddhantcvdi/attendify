@@ -10,6 +10,7 @@ interface AttendanceContextValue {
   extraClasses: ExtraClasses;
   setStatus: (dateKey: string, lectureId: string, status: AttendanceStatus) => void;
   addExtraClass: (dateKey: string, lecture: Lecture) => void;
+  clearAttendance: () => void;
 }
 
 const AttendanceContext = createContext<AttendanceContextValue>({
@@ -17,6 +18,7 @@ const AttendanceContext = createContext<AttendanceContextValue>({
   extraClasses: {},
   setStatus: () => {},
   addExtraClass: () => {},
+  clearAttendance: () => {},
 });
 
 export function AttendanceProvider({ children }: { children: React.ReactNode }) {
@@ -51,10 +53,17 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
     });
   }, []);
 
+  const clearAttendance = useCallback(() => {
+    setStatusOverrides({});
+    setExtraClasses({});
+    Storage.set(Storage.KEYS.ATTENDANCE, {});
+    Storage.set(Storage.KEYS.EXTRA_CLASSES, {});
+  }, []);
+
   if (!loaded) return null;
 
   return (
-    <AttendanceContext.Provider value={{ statusOverrides, extraClasses, setStatus, addExtraClass }}>
+    <AttendanceContext.Provider value={{ statusOverrides, extraClasses, setStatus, addExtraClass, clearAttendance }}>
       {children}
     </AttendanceContext.Provider>
   );

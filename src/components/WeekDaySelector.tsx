@@ -69,24 +69,20 @@ function WeekRow({
             key={index}
             onPress={() => onSelectDate(date)}
             className={`items-center py-2 px-3 font-medium rounded-xl ${
-              isSelected ? "bg-[#ff7648]" : isToday ? "#ff7648/20" : ""
+              isSelected ? "bg-[#ff7648]" : isToday ? "bg-[#ff7648]/10" : ""
             }`}
             activeOpacity={0.7}
           >
             <Text
               className={`text-xs font-medium mb-0 ${
-                isSelected ? "text-white" : "text-text-muted"
+                isSelected ? "text-white" : isToday ? "text-[#ff7648]" : "text-text-muted"
               }`}
             >
               {DAY_LABELS[index]}
             </Text>
             <Text
               className={`text-md font-semibold ${
-                isSelected
-                  ? "text-white"
-                  : isToday
-                    ? "text-primary-700"
-                    : "text-text"
+                isSelected ? "text-white" : isToday ? "text-[#ff7648]" : "text-text"
               }`}
             >
               {date.getDate()}

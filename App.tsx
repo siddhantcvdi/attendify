@@ -6,7 +6,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import TabNavigator from "./src/navigation/TabNavigator";
 import { ProfileProvider } from "./src/context/ProfileContext";
 import { SubjectsProvider } from "./src/context/SubjectsContext";
+import { ScheduleProvider } from "./src/context/ScheduleContext";
 import { AttendanceProvider } from "./src/context/AttendanceContext";
+import { AppResetProvider } from "./src/context/AppResetContext";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 
 const ONBOARDING_KEY = "onboarding_complete";
@@ -14,6 +16,7 @@ const ONBOARDING_KEY = "onboarding_complete";
 export default function App() {
   const [ready, setReady] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [instanceKey, setInstanceKey] = useState(0);
 
   useEffect(() => {
     AsyncStorage.getItem(ONBOARDING_KEY).then((value) => {
@@ -27,13 +30,28 @@ export default function App() {
     setShowOnboarding(false);
   }
 
+  async function handleReset() {
+    await AsyncStorage.multiRemove([
+      ONBOARDING_KEY,
+      "@attendify:profile",
+      "@attendify:subjects",
+      "@attendify:schedule",
+      "@attendify:attendance",
+      "@attendify:extra_classes",
+    ]);
+    setInstanceKey((k) => k + 1);
+    setShowOnboarding(true);
+  }
+
   if (!ready) return null;
 
   return (
   <SafeAreaProvider>
-    <ProfileProvider>
-    <SubjectsProvider>
-    <AttendanceProvider>
+    <ProfileProvider key={instanceKey}>
+    <SubjectsProvider key={instanceKey}>
+    <ScheduleProvider key={instanceKey}>
+    <AttendanceProvider key={instanceKey}>
+    <AppResetProvider onReset={handleReset}>
       <NavigationContainer>
         <StatusBar style="dark" />
 
@@ -44,7 +62,9 @@ export default function App() {
         )}
 
       </NavigationContainer>
+    </AppResetProvider>
     </AttendanceProvider>
+    </ScheduleProvider>
     </SubjectsProvider>
     </ProfileProvider>
   </SafeAreaProvider>

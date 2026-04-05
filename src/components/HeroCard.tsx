@@ -32,7 +32,7 @@ export default function HeroCard({
           <View className="flex-row items-center mb-4">
             <CheckCircle size={14} color="rgba(255,255,255,0.7)" />
             <Text className="text-white text-sm ml-1">
-              {attended} of {total} lectures attended
+              {total === 0 ? "No lectures today" : `${attended} of ${total} lectures attended`}
             </Text>
           </View>
 
