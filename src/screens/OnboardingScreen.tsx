@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Animated,
 } from "react-native";
+import GlobeIllustration from "../../assets/image.svg";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Minus, Plus, Locate, MapPin } from "lucide-react-native";
 import MapView, { Marker, Circle, MapPressEvent } from "react-native-maps";
@@ -30,6 +32,43 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   const mapRef = useRef<MapView>(null);
 
   const [step, setStep] = useState(0);
+
+  // Entrance animations
+  const bannerY = useRef(new Animated.Value(-40)).current;
+  const bannerOpacity = useRef(new Animated.Value(0)).current;
+  const globeScale = useRef(new Animated.Value(1)).current;
+  const textY = useRef(new Animated.Value(30)).current;
+  const textOpacity = useRef(new Animated.Value(0)).current;
+  const buttonY = useRef(new Animated.Value(20)).current;
+  const buttonOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      // Banner slides down
+      Animated.parallel([
+        Animated.timing(bannerY, { toValue: 0, duration: 500, useNativeDriver: true }),
+        Animated.timing(bannerOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+      ]),
+    ]).start();
+
+    // Text fades up slightly after banner
+    Animated.sequence([
+      Animated.delay(300),
+      Animated.parallel([
+        Animated.timing(textY, { toValue: 0, duration: 500, useNativeDriver: true }),
+        Animated.timing(textOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+      ]),
+    ]).start();
+
+    // Button comes up last
+    Animated.sequence([
+      Animated.delay(600),
+      Animated.parallel([
+        Animated.timing(buttonY, { toValue: 0, duration: 400, useNativeDriver: true }),
+        Animated.timing(buttonOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+      ]),
+    ]).start();
+  }, []);
 
   // Setup page state
   const [name, setName] = useState("");
@@ -98,16 +137,42 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
         className="flex-1"
       >
         {/* Page 1 — Welcome */}
-        <View style={{ width }} className="flex-1 items-center justify-center px-8">
-          <View className="w-28 h-28 rounded-full bg-[#4dc591]/15 items-center justify-center mb-8">
-            <Text style={{ fontSize: 56 }}>📚</Text>
-          </View>
-          <Text className="text-text text-3xl font-bold text-center mb-4">
-            Stay above{"\n"}the bar
-          </Text>
-          <Text className="text-text-muted text-sm text-center leading-relaxed">
-            Attendify tracks your attendance across all subjects and warns you before you fall below your requirement.
-          </Text>
+        <View style={{ width }} className="flex-1">
+          {/* Green banner */}
+          <Animated.View
+            style={{ backgroundColor: "#05795a", height: 400, borderBottomLeftRadius: 0, zIndex: 1, opacity: bannerOpacity, transform: [{ translateY: bannerY }] }}
+            className="items-center justify-end"
+          >
+            {/* Decorative circles clipped inside their own container */}
+            <View style={{ position: "absolute", inset: 0, borderBottomLeftRadius: 40, borderBottomRightRadius: 40, overflow: "hidden" }}>
+              <View style={{ position: "absolute", top: 30, left: -50, width: 180, height: 180, borderRadius: 90, backgroundColor: "rgba(255,255,255,0.06)" }} />
+              <View style={{ position: "absolute", top: 80, right: -40, width: 130, height: 130, borderRadius: 65, backgroundColor: "rgba(255,255,255,0.05)" }} />
+              <View style={{ position: "absolute", bottom: 80, left: 24, width: 70, height: 70, borderRadius: 35, backgroundColor: "rgba(255,255,255,0.06)" }} />
+              <View style={{ position: "absolute", top: 50, right: 60, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.08)" }} />
+            </View>
+
+            {/* App name badge */}
+            <View style={{ position: "absolute", top: 28, left: 0, right: 0, alignItems: "center" }}>
+              <View style={{ backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 20, paddingHorizontal: 16, paddingVertical: 5 }}>
+                <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: "700", letterSpacing: 1.5 }}>ATTENDIFY</Text>
+              </View>
+            </View>
+
+            {/* Globe pinned to right, bleeds below the banner */}
+            <Animated.View style={{ position: "absolute", right: 0, bottom: -20, zIndex: 2, transform: [{ scale: globeScale }] }}>
+              <GlobeIllustration width={280} height={260} />
+            </Animated.View>
+          </Animated.View>
+
+          {/* Text content */}
+          <Animated.View className="flex-1 items-center justify-center px-8" style={{ opacity: textOpacity, transform: [{ translateY: textY }] }}>
+            <Text className="text-text text-5xl font-bold text-center mb-4 -mt-8">
+              Stay above{"\n"}the bar.
+            </Text>
+            <Text className="text-gray-500 text-base text-center leading-relaxed">
+              Track attendance across every subject and get warned before you slip below your minimum.
+            </Text>
+          </Animated.View>
         </View>
 
         {/* Page 2 — Setup */}
@@ -246,7 +311,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
       </ScrollView>
 
       {/* Bottom button */}
-      <View className="px-6 pb-8 pt-2 absolute bottom-0 left-0 right-0">
+      <Animated.View className="px-6 pb-8 pt-2 absolute bottom-0 left-0 right-0" style={{ opacity: buttonOpacity, transform: [{ translateY: buttonY }] }}>
         {step === 0 ? (
           <TouchableOpacity
             onPress={goToSetup}
@@ -266,7 +331,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
             <Text className="text-white text-base font-bold">Start Tracking 🎯</Text>
           </TouchableOpacity>
         )}
-      </View>
+      </Animated.View>
     </SafeAreaView>
   );
 }
