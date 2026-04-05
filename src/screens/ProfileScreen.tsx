@@ -7,16 +7,70 @@ import {
   ScrollView,
   Alert,
   Share,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MapPin, ChevronRight, Minus, Plus, BookOpen, Upload, Download, Trash2, RefreshCw } from "lucide-react-native";
-import * as DocumentPicker from "expo-document-picker";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import type { FirestoreError } from "firebase/firestore";
 import { useProfile } from "../context/ProfileContext";
 import { useSubjects } from "../context/SubjectsContext";
 import { useSchedule } from "../context/ScheduleContext";
 import { useAppReset } from "../context/AppResetContext";
 import LocationSetupScreen from "./LocationSetupScreen";
-import { ClassLocation } from "../data/types";
+import { ClassLocation, Lecture, Subject } from "../data/types";
+import { ensureFirestoreConfigured } from "../services/firebase";
+import { Storage } from "../storage";
+
+type ScheduleTemplate = Omit<Lecture, "id" | "status">;
+type WeekdaySchedules = Record<number, ScheduleTemplate[]>;
+
+interface TimetablePayload {
+  version: "1";
+  subjects: Subject[];
+  schedule: WeekdaySchedules;
+}
+
+const TIMETABLE_EXPORT_CODE_KEY = "@lectur:timetable_export_code";
+
+function getFirestoreErrorMessage(error: unknown): string {
+  const fallback = "Unexpected error while contacting Firestore.";
+  if (!error || typeof error !== "object") return fallback;
+
+  const firestoreError = error as Partial<FirestoreError>;
+  switch (firestoreError.code) {
+    case "permission-denied":
+      return "Firestore denied access. Update rules to allow reads/writes for timetable_exports.";
+    case "failed-precondition":
+      return "Firestore is not fully enabled for this project yet. Open Firebase Console and create the Firestore database.";
+    case "unavailable":
+      return "Firestore is currently unavailable. Check internet and retry.";
+    case "unauthenticated":
+      return "This operation requires authentication in your current Firestore rules.";
+    default:
+      return typeof firestoreError.message === "string" && firestoreError.message.length > 0
+        ? firestoreError.message
+        : fallback;
+  }
+}
+
+function normalizeSchedule(input: unknown): WeekdaySchedules | null {
+  if (!input || typeof input !== "object") return null;
+
+  const output: WeekdaySchedules = {};
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    const day = Number(key);
+    if (!Number.isInteger(day) || day < 0 || day > 6 || !Array.isArray(value)) {
+      return null;
+    }
+    output[day] = value as ScheduleTemplate[];
+  }
+
+  return output;
+}
 
 export default function ProfileScreen() {
   const { profile, updateProfile } = useProfile();
@@ -25,33 +79,86 @@ export default function ProfileScreen() {
   const { resetApp } = useAppReset();
   const [name, setName] = useState(profile.name);
   const [showLocationSetup, setShowLocationSetup] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importCode, setImportCode] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+
+  async function getOrCreateExportCode(): Promise<string> {
+    const existing = await Storage.get<string>(TIMETABLE_EXPORT_CODE_KEY);
+    if (existing && existing.trim().length > 0) return existing;
+
+    const code = `lectur_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    await Storage.set(TIMETABLE_EXPORT_CODE_KEY, code);
+    return code;
+  }
 
   async function handleExport() {
+    if (isExporting) return;
+
     try {
-      const data = { version: "1", subjects, schedule: weekdaySchedules };
-      const json = JSON.stringify(data, null, 2);
-      await Share.share({ message: json, title: "Attendify Timetable" });
+      setIsExporting(true);
+      const db = ensureFirestoreConfigured();
+
+      const payload: TimetablePayload = {
+        version: "1",
+        subjects,
+        schedule: weekdaySchedules,
+      };
+
+      const code = await getOrCreateExportCode();
+      await setDoc(doc(db, "timetable_exports", code), {
+        ...payload,
+        updatedAt: serverTimestamp(),
+      });
+
+      await Share.share({
+        message: `Attendify timetable code: ${code}`,
+        title: "Attendify Timetable",
+      });
+      Alert.alert("Exported", `Share this code to import on another device:\n\n${code}`);
     } catch (e) {
-      Alert.alert("Export failed", "Could not export timetable.");
+      Alert.alert("Export failed", getFirestoreErrorMessage(e));
+    } finally {
+      setIsExporting(false);
     }
   }
 
-  async function handleImport() {
+  async function handleImportFromFirestore() {
+    if (isImporting) return;
+
+    const code = importCode.trim();
+    if (!code) {
+      Alert.alert("Code required", "Enter an export code to import your timetable.");
+      return;
+    }
+
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: "application/json", copyToCacheDirectory: true });
-      if (result.canceled || !result.assets?.[0]) return;
-      const response = await fetch(result.assets[0].uri);
-      const raw = await response.text();
-      const data = JSON.parse(raw);
-      if (!data.version || !data.subjects || !data.schedule) {
-        Alert.alert("Invalid file", "This file doesn't look like an Attendify timetable.");
+      setIsImporting(true);
+      const db = ensureFirestoreConfigured();
+      const snap = await getDoc(doc(db, "timetable_exports", code));
+
+      if (!snap.exists()) {
+        Alert.alert("Code not found", "No export exists for this code.");
         return;
       }
-      setSchedule(data.schedule);
-      importSubjects(data.subjects);
+
+      const raw = snap.data() as Partial<TimetablePayload>;
+      const schedule = normalizeSchedule(raw.schedule);
+      if (raw.version !== "1" || !Array.isArray(raw.subjects) || !schedule) {
+        Alert.alert("Invalid data", "The Firestore entry is not a valid Attendify timetable.");
+        return;
+      }
+
+      setSchedule(schedule);
+      importSubjects(raw.subjects as Subject[]);
+      setImportCode("");
+      setShowImportModal(false);
       Alert.alert("Imported", "Timetable imported successfully.");
     } catch (e) {
-      Alert.alert("Import failed", "Could not read the selected file.");
+      Alert.alert("Import failed", getFirestoreErrorMessage(e));
+    } finally {
+      setIsImporting(false);
     }
   }
 
@@ -183,7 +290,7 @@ export default function ProfileScreen() {
         <Text className="text-text text-lg font-bold px-5 mb-3">Timetable</Text>
         <View className="bg-white rounded-3xl border border-neutral-200 mx-4 mb-6 overflow-hidden">
           <TouchableOpacity
-            onPress={handleImport}
+            onPress={() => setShowImportModal(true)}
             activeOpacity={0.7}
             className="flex-row items-center justify-between p-4"
           >
@@ -193,7 +300,7 @@ export default function ProfileScreen() {
               </View>
               <View>
                 <Text className="text-text text-sm font-semibold">Import Timetable</Text>
-                <Text className="text-text-muted text-xs mt-0.5">Load from a file</Text>
+                <Text className="text-text-muted text-xs mt-0.5">Load using Lectur code</Text>
               </View>
             </View>
             <ChevronRight size={16} color="#bcc1cd" />
@@ -203,6 +310,7 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             onPress={handleExport}
+            disabled={isExporting}
             activeOpacity={0.7}
             className="flex-row items-center justify-between p-4"
           >
@@ -211,11 +319,11 @@ export default function ProfileScreen() {
                 <Upload size={16} color="#ff7648" />
               </View>
               <View>
-                <Text className="text-text text-sm font-semibold">Export Timetable</Text>
-                <Text className="text-text-muted text-xs mt-0.5">Save as a file</Text>
+                <Text className="text-text text-sm font-semibold">Share Timetable</Text>
+                <Text className="text-text-muted text-xs mt-0.5">Upload timetable and share code</Text>
               </View>
             </View>
-            <ChevronRight size={16} color="#bcc1cd" />
+            {isExporting ? <ActivityIndicator size="small" color="#ff7648" /> : <ChevronRight size={16} color="#bcc1cd" />}
           </TouchableOpacity>
         </View>
 
@@ -293,6 +401,65 @@ export default function ProfileScreen() {
         onSave={handleSaveLocation}
         initialLocation={profile.classLocation}
       />
+
+      <Modal
+        visible={showImportModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowImportModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          className="flex-1 justify-end"
+        >
+          <View className="flex-1 bg-black/40" />
+          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-6">
+            <Text className="text-text text-lg font-bold">Import from Firestore</Text>
+            <Text className="text-text-muted text-sm mt-1 mb-4">
+              Enter the code generated during export.
+            </Text>
+
+            <View className="border border-neutral-200 rounded-2xl px-3 py-1">
+              <TextInput
+                value={importCode}
+                onChangeText={setImportCode}
+                editable={!isImporting}
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder="e.g. 4aZp9JvQk2Xn"
+                className="text-text text-sm"
+                style={{ fontFamily: "Poppins_400Regular" }}
+              />
+            </View>
+
+            <View className="flex-row mt-4 gap-3">
+              <TouchableOpacity
+                onPress={() => {
+                  if (isImporting) return;
+                  setShowImportModal(false);
+                }}
+                activeOpacity={0.7}
+                className="flex-1 h-11 rounded-2xl border border-neutral-200 items-center justify-center"
+              >
+                <Text className="text-text-muted text-sm font-semibold">Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleImportFromFirestore}
+                disabled={isImporting}
+                activeOpacity={0.7}
+                className="flex-1 h-11 rounded-2xl bg-[#4dc591] items-center justify-center"
+              >
+                {isImporting ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text className="text-white text-sm font-semibold">Import</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
