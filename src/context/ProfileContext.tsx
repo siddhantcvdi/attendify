@@ -1,0 +1,36 @@
+import React, { createContext, useContext, useState } from "react";
+import { UserProfile } from "../data/types";
+
+const DEFAULT_PROFILE: UserProfile = {
+  name: "Siddhant",
+  minAttendance: 75,
+  classLocation: null,
+};
+
+interface ProfileContextValue {
+  profile: UserProfile;
+  updateProfile: (patch: Partial<UserProfile>) => void;
+}
+
+const ProfileContext = createContext<ProfileContextValue>({
+  profile: DEFAULT_PROFILE,
+  updateProfile: () => {},
+});
+
+export function ProfileProvider({ children }: { children: React.ReactNode }) {
+  const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
+
+  function updateProfile(patch: Partial<UserProfile>) {
+    setProfile((prev) => ({ ...prev, ...patch }));
+  }
+
+  return (
+    <ProfileContext.Provider value={{ profile, updateProfile }}>
+      {children}
+    </ProfileContext.Provider>
+  );
+}
+
+export function useProfile() {
+  return useContext(ProfileContext);
+}

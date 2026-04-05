@@ -7,7 +7,6 @@ export const subjects: Subject[] = [
     code: "CS201",
     totalClasses: 42,
     attendedClasses: 38,
-    color: "#22c55e",
   },
   {
     id: "sub-2",
@@ -15,7 +14,6 @@ export const subjects: Subject[] = [
     code: "CS301",
     totalClasses: 40,
     attendedClasses: 34,
-    color: "#3b82f6",
   },
   {
     id: "sub-3",
@@ -23,7 +21,6 @@ export const subjects: Subject[] = [
     code: "CS302",
     totalClasses: 38,
     attendedClasses: 28,
-    color: "#f59e0b",
   },
   {
     id: "sub-4",
@@ -31,7 +28,6 @@ export const subjects: Subject[] = [
     code: "CS303",
     totalClasses: 36,
     attendedClasses: 32,
-    color: "#8b5cf6",
   },
   {
     id: "sub-5",
@@ -39,7 +35,6 @@ export const subjects: Subject[] = [
     code: "CS304",
     totalClasses: 35,
     attendedClasses: 24,
-    color: "#ef4444",
   },
   {
     id: "sub-6",
@@ -47,7 +42,6 @@ export const subjects: Subject[] = [
     code: "MA201",
     totalClasses: 44,
     attendedClasses: 40,
-    color: "#14b8a6",
   },
 ];
 

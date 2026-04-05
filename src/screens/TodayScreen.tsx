@@ -173,7 +173,7 @@ export default function TodayScreen() {
         <ScrollView
           className="flex-1 bg-white"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingTop: 4, paddingBottom: 24 }}
+          contentContainerStyle={{ paddingTop: 4, paddingBottom: 100 }}
         >
           <View className="pl-0 pr-4">
             {lectures.map((lecture) => (

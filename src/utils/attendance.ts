@@ -14,9 +14,8 @@ export function getTodayAttendancePercentage(lectures: Lecture[]): number {
 }
 
 export function getAttendanceColor(percentage: number): string {
-  if (percentage < 75) return "#ef4444";
-  if (percentage < 85) return "#f59e0b";
-  return "#22c55e";
+  if (percentage < 75) return "#ff7648";
+  return "#4dc591";
 }
 
 function parseTime(timeStr: string): number {

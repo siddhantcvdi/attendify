@@ -24,33 +24,33 @@ export default function SubjectCard({
   const color = getAttendanceColor(percentage);
 
   return (
-    <View className={`bg-white rounded-2xl p-4 ${className ?? ""}`}>
-      <View className="flex-row items-center">
-        <View
-          className="w-10 h-10 rounded-xl items-center justify-center mr-3"
-          style={{ backgroundColor: `${color}18` }}
-        >
-          <BookOpen size={18} color={color} />
-        </View>
-
-        <View className="flex-1 mr-3">
-          <Text className="text-text text-base font-semibold" numberOfLines={1}>
-            {name}
-          </Text>
-          <Text className="text-text-muted text-xs mt-0.5">
-            {code} &middot; {attended}/{total} classes
-          </Text>
-        </View>
-
-        <CircularProgress
-          percentage={percentage}
-          size={48}
-          strokeWidth={5}
-          color={color}
-          backgroundColor="#f1f5f1"
-          labelClassName="text-xs font-bold text-center"
-        />
+    <View
+      className={`bg-white rounded-3xl border border-neutral-200 p-4 w-36 ${className ?? ""}`}
+    >
+      <View
+        className="w-9 h-9 rounded-xl items-center justify-center mb-3"
+        style={{ backgroundColor: "#5f8a8518" }}
+      >
+        <BookOpen size={16} color="#5f8a85" />
       </View>
+
+      <Text className="text-text text-sm font-semibold mb-0.5 h-10" numberOfLines={2}>
+        {name}
+      </Text>
+      <Text className="text-text-muted text-xs mb-3" numberOfLines={1}>{code}</Text>
+
+      <CircularProgress
+        percentage={percentage}
+        size={44}
+        strokeWidth={5}
+        color={color}
+        backgroundColor={`${color}20`}
+        labelClassName="text-xs font-bold text-center"
+      />
+
+      <Text className="text-text-muted text-xs mt-2">
+        {attended}/{total} classes
+      </Text>
     </View>
   );
 }

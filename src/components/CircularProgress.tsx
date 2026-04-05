@@ -48,7 +48,7 @@ export default function CircularProgress({
           stroke={color}
           strokeWidth={strokeWidth}
           fill="none"
-          strokeDasharray={`${circumference}`}
+          strokeDasharray={circumference}
           strokeDashoffset={strokeDashoffset}
           strokeLinecap="round"
           transform={`rotate(-90 ${size / 2} ${size / 2})`}

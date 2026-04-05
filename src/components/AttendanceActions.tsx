@@ -57,7 +57,8 @@ export default function AttendanceActions({
 
   return (
     <View
-      className={`flex-row ${outerBg} rounded-xl p-1 overflow-hidden ${className ?? ""}`}
+      className={`flex-row ${outerBg} rounded-xl p-1 ${className ?? ""}`}
+      style={{ overflow: "hidden" }}
     >
       {OPTIONS.map(({ value, label, icon: Icon }, index) => {
         const isSelected = status === value;
@@ -67,19 +68,20 @@ export default function AttendanceActions({
           <TouchableOpacity
             key={value}
             onPress={() => onStatusChange(isSelected ? null : value)}
-            className={`flex-1 flex-row items-center justify-center py-2 ${
+            className={`flex-1 flex-row items-center justify-center py-1 ${
               isSelected ? selected.bg : ""
             } ${isSelected ? "rounded-lg" : ""}`}
             activeOpacity={0.7}
           >
             <Icon
-              size={12}
+              size={11}
               color={isSelected ? selected.iconColor : defaultIcon}
             />
             <Text
-              className={`text-xs font-semibold ml-1 ${
+              className={`text-xs font-medium ml-1 ${
                 isSelected ? selected.text : defaultText
               }`}
+              style={{ fontSize: 11 }}
             >
               {label}
             </Text>

@@ -19,6 +19,12 @@ export default function LectureTimelineCard({
 }: LectureTimelineCardProps) {
   const isCancelled = lecture.status === "cancelled";
 
+  const metaColor = isCancelled
+    ? "#94a9a6"
+    : isActive
+      ? "rgba(255,255,255,0.7)"
+      : "#5f8a85";
+
   return (
     <View className={`flex-row ${className ?? ""}`}>
       {/* Time column */}
@@ -49,7 +55,7 @@ export default function LectureTimelineCard({
 
       {/* Card */}
       <View
-        className={`flex-1 rounded-3xl border border-neutral-200 p-4  mb-4 ${
+        className={`flex-1 rounded-3xl border border-neutral-200 p-4 mb-4 ${
           isCancelled
             ? "bg-gray-50"
             : isActive
@@ -58,7 +64,7 @@ export default function LectureTimelineCard({
         }`}
       >
         <Text
-          className={`text-lg font-bold mb-1 ${
+          className={`text-base font-bold mb-1.5 ${
             isCancelled
               ? "text-text-muted"
               : isActive
@@ -69,52 +75,35 @@ export default function LectureTimelineCard({
           {lecture.subjectName}
         </Text>
 
-        <View className="flex-row items-center mb-1.5">
-          <MapPin
-            size={13}
-            color={
-              isCancelled
-                ? "#94a9a6"
-                : isActive
-                  ? "rgba(255,255,255,0.7)"
-                  : "#5f8a85"
-            }
-          />
-          <Text
-            className={`text-sm ml-1.5 ${
-              isCancelled
-                ? "text-text-muted"
-                : isActive
-                  ? "text-white/70"
-                  : "text-text-secondary"
-            }`}
-          >
-            {lecture.room}
-          </Text>
-        </View>
-
-        <View className="flex-row items-center mb-3">
-          <User
-            size={13}
-            color={
-              isCancelled
-                ? "#94a9a6"
-                : isActive
-                  ? "rgba(255,255,255,0.7)"
-                  : "#5f8a85"
-            }
-          />
-          <Text
-            className={`text-sm ml-1.5 ${
-              isCancelled
-                ? "text-text-muted"
-                : isActive
-                  ? "text-white/70"
-                  : "text-text-secondary"
-            }`}
-          >
-            {lecture.professor}
-          </Text>
+        <View className="flex-row items-center gap-3 mb-3">
+          <View className="flex-row items-center">
+            <MapPin size={12} color={metaColor} />
+            <Text
+              className={`text-xs ml-1 ${
+                isCancelled
+                  ? "text-text-muted"
+                  : isActive
+                    ? "text-white/70"
+                    : "text-text-muted"
+              }`}
+            >
+              {lecture.room}
+            </Text>
+          </View>
+          <View className="flex-row items-center">
+            <User size={12} color={metaColor} />
+            <Text
+              className={`text-xs ml-1 ${
+                isCancelled
+                  ? "text-text-muted"
+                  : isActive
+                    ? "text-white/70"
+                    : "text-text-muted"
+              }`}
+            >
+              {lecture.professor}
+            </Text>
+          </View>
         </View>
 
         <AttendanceActions

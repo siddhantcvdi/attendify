@@ -24,36 +24,37 @@ export default function OngoingLectureCard({
 
   return (
     <View
-      className={`bg-white rounded-2xl border-neutral-200 p-5 ${className ?? ""}`}
+      className={`bg-white rounded-3xl border border-neutral-200 p-4 ${className ?? ""}`}
     >
-      <View className="flex-row items-center justify-between mb-3">
+      <View className="flex-row items-center justify-between mb-2">
         <Text className="text-text-secondary text-sm font-medium">
           {isOngoing ? "Ongoing Lecture" : "Up Next"}
         </Text>
         <View
-          className={`flex-row items-center ${badgeColor} rounded-full px-3 py-1`}
+          className={`flex-row items-center ${badgeColor} rounded-full px-2.5 py-0.5`}
         >
-          <Radio size={10} color={dotColor} />
+          <Radio size={9} color={dotColor} />
           <Text className={`${badgeTextColor} text-xs font-semibold ml-1`}>
             {badgeLabel}
           </Text>
         </View>
       </View>
 
-      <Text className="text-text text-xl font-bold mb-3">
+      <Text className="text-text text-lg font-bold mb-2">
         {lecture.subjectName}
       </Text>
 
-      <View className="flex-row items-center mb-2">
-        <Clock size={15} color="#5f8a85" />
-        <Text className="text-text-secondary text-sm ml-2">
-          {lecture.startTime} - {lecture.endTime}
-        </Text>
-      </View>
-
-      <View className="flex-row items-center mb-4">
-        <MapPin size={15} color="#5f8a85" />
-        <Text className="text-text-secondary text-sm ml-2">{lecture.room}</Text>
+      <View className="flex-row items-center gap-3 mb-3">
+        <View className="flex-row items-center">
+          <Clock size={13} color="#5f8a85" />
+          <Text className="text-text-muted text-xs ml-1">
+            {lecture.startTime} - {lecture.endTime}
+          </Text>
+        </View>
+        <View className="flex-row items-center">
+          <MapPin size={13} color="#5f8a85" />
+          <Text className="text-text-muted text-xs ml-1">{lecture.room}</Text>
+        </View>
       </View>
 
       <AttendanceActions

@@ -19,7 +19,7 @@ export default function HeroCard({
   className,
 }: HeroCardProps) {
   return (
-    <View className={`bg-primary-600 rounded-[30px] mx-3 p-5 ${className ?? ""}`}>
+    <View className={`bg-[#4dc591] rounded-3xl mx-3 p-5 ${className ?? ""}`}>
       <View className="flex-row items-center justify-between">
         <View className="flex-1 mr-4">
           <View className="flex-row items-center mb-2">
