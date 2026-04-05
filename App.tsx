@@ -28,17 +28,19 @@ export default function App() {
   if (!ready) return null;
 
   return (
-    <SafeAreaProvider>
-      <ProfileProvider>
+  <SafeAreaProvider>
+    <ProfileProvider>
+      <NavigationContainer>
         <StatusBar style="dark" />
+
         {showOnboarding ? (
           <OnboardingScreen onComplete={handleOnboardingComplete} />
         ) : (
-          <NavigationContainer>
-            <TabNavigator />
-          </NavigationContainer>
+          <TabNavigator />
         )}
-      </ProfileProvider>
-    </SafeAreaProvider>
-  );
+
+      </NavigationContainer>
+    </ProfileProvider>
+  </SafeAreaProvider>
+);
 }

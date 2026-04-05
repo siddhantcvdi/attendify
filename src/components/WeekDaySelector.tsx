@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from "react";
+import React, { useRef, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -105,9 +105,18 @@ export default function WeekDaySelector({
   onWeekChange,
   className,
 }: WeekDaySelectorProps) {
-  const { width } = useWindowDimensions();
+  const { width: windowWidth } = useWindowDimensions();
+  const [listWidth, setListWidth] = React.useState(windowWidth);
   const flatListRef = useRef<FlatList>(null);
   const currentIndexRef = useRef(CENTER_INDEX);
+
+  useEffect(() => {
+    const targetIndex = CENTER_INDEX + weekOffset;
+    if (targetIndex !== currentIndexRef.current) {
+      currentIndexRef.current = targetIndex;
+      flatListRef.current?.scrollToIndex({ index: targetIndex, animated: true });
+    }
+  }, [weekOffset]);
 
   const weekOffsets = React.useMemo(
     () => Array.from({ length: TOTAL_WEEKS }, (_, i) => i - WEEKS_BUFFER),
@@ -116,14 +125,14 @@ export default function WeekDaySelector({
 
   const onMomentumScrollEnd = useCallback(
     (e: { nativeEvent: { contentOffset: { x: number } } }) => {
-      const newIndex = Math.round(e.nativeEvent.contentOffset.x / width);
+      const newIndex = Math.round(e.nativeEvent.contentOffset.x / listWidth);
       if (newIndex !== currentIndexRef.current) {
         currentIndexRef.current = newIndex;
         const newOffset = newIndex - WEEKS_BUFFER;
         onWeekChange(newOffset);
       }
     },
-    [width, onWeekChange],
+    [listWidth, onWeekChange],
   );
 
   const goToPrevWeek = useCallback(() => {
@@ -146,11 +155,11 @@ export default function WeekDaySelector({
 
   const getItemLayout = useCallback(
     (_: unknown, index: number) => ({
-      length: width,
-      offset: width * index,
+      length: listWidth,
+      offset: listWidth * index,
       index,
     }),
-    [width],
+    [listWidth],
   );
 
   const renderItem = useCallback(
@@ -159,10 +168,10 @@ export default function WeekDaySelector({
         weekOffset={item}
         selectedDate={selectedDate}
         onSelectDate={onSelectDate}
-        width={width}
+        width={listWidth}
       />
     ),
-    [selectedDate, onSelectDate, width],
+    [selectedDate, onSelectDate, listWidth],
   );
 
   return (
@@ -187,6 +196,7 @@ export default function WeekDaySelector({
           initialScrollIndex={CENTER_INDEX}
           getItemLayout={getItemLayout}
           onMomentumScrollEnd={onMomentumScrollEnd}
+          onLayout={(e) => setListWidth(e.nativeEvent.layout.width)}
           className="flex-1"
         />
 

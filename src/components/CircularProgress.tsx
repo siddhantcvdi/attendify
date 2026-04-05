@@ -25,7 +25,10 @@ export default function CircularProgress({
 }: CircularProgressProps) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+  // Leave a gap of strokeWidth arc-length at 100% so the rounded caps just touch without merging
+  const gapPercent = (strokeWidth / circumference) * 100;
+  const clampedPercentage = percentage >= 100 ? 100 - gapPercent : percentage;
+  const strokeDashoffset = circumference - (clampedPercentage / 100) * circumference;
 
   return (
     <View

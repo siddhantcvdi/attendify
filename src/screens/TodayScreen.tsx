@@ -53,7 +53,6 @@ export default function TodayScreen() {
 
   const today = new Date();
   const isToday = isSameDay(selectedDate, today);
-  const isWeekend = selectedDate.getDay() === 0 || selectedDate.getDay() === 6;
 
   const lectures: Lecture[] = useMemo(() => {
     const base = getLecturesForDate(selectedDate);
@@ -154,16 +153,7 @@ export default function TodayScreen() {
       </View>
 
       {/* Scrollable timeline area */}
-      {isWeekend ? (
-        <View className="flex-1 items-center justify-center px-6">
-          <Text className="text-text text-lg font-semibold mb-1">
-            No Classes
-          </Text>
-          <Text className="text-text-muted text-sm text-center">
-            Enjoy your weekend!
-          </Text>
-        </View>
-      ) : lectures.length === 0 ? (
+      {lectures.length === 0 ? (
         <View className="flex-1 items-center justify-center px-6">
           <Text className="text-text-muted text-sm text-center">
             No lectures scheduled for this day.

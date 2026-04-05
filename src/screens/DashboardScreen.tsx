@@ -7,11 +7,14 @@ import HeroCard from "../components/HeroCard";
 import OngoingLectureCard from "../components/OngoingLectureCard";
 import SubjectCard from "../components/SubjectCard";
 import AddSubjectScreen from "./AddSubjectScreen";
-import { subjects as initialSubjects, todayLectures as initialLectures } from "../data/mockData";
+import EditSubjectModal from "../components/EditSubjectModal";
+import BunkCalculator from "../components/BunkCalculator";
+import { subjects as initialSubjects } from "../data/mockData";
+import { getLecturesForDate } from "../data/scheduleData";
 import {
   getTodayAttendancePercentage,
   getTodayProgress,
-  getOngoingOrNextLecture,
+  getDashboardLectures,
   getAttendancePercentage,
 } from "../utils/attendance";
 import { AttendanceStatus, Subject } from "../data/types";
@@ -27,13 +30,14 @@ function getGreeting(): { text: string; emoji: string } {
 export default function DashboardScreen() {
   const { profile } = useProfile();
   const { text: greetingText, emoji } = getGreeting();
-  const [lectures, setLectures] = useState(initialLectures);
+  const [lectures, setLectures] = useState(() => getLecturesForDate(new Date()));
   const [subjects, setSubjects] = useState(initialSubjects);
   const [showAddSubject, setShowAddSubject] = useState(false);
+  const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
 
   const todayPercentage = useMemo(() => getTodayAttendancePercentage(lectures), [lectures]);
   const { attended, total } = useMemo(() => getTodayProgress(lectures), [lectures]);
-  const currentLecture = useMemo(() => getOngoingOrNextLecture(lectures), [lectures]);
+  const dashboardLectures = useMemo(() => getDashboardLectures(lectures), [lectures]);
 
   const handleStatusChange = useCallback((lectureId: string, status: AttendanceStatus) => {
     setLectures((prev) =>
@@ -43,6 +47,14 @@ export default function DashboardScreen() {
 
   const handleAddSubject = useCallback((subject: Subject) => {
     setSubjects((prev) => [...prev, subject]);
+  }, []);
+
+  const handleDeleteSubject = useCallback((id: string) => {
+    setSubjects((prev) => prev.filter((s) => s.id !== id));
+  }, []);
+
+  const handleSaveSubject = useCallback((updated: Subject) => {
+    setSubjects((prev) => prev.map((s) => s.id === updated.id ? updated : s));
   }, []);
 
   return (
@@ -73,22 +85,32 @@ export default function DashboardScreen() {
           className="mx-4 mt-2"
         />
 
-        {/* Ongoing / Next Lecture */}
-        {currentLecture && (
-          <OngoingLectureCard
-            lecture={currentLecture.lecture}
-            isOngoing={currentLecture.isOngoing}
-            onStatusChange={handleStatusChange}
-            className="mx-4 mt-5"
-          />
-        )}
+        {/* Bunk Calculator */}
+        <BunkCalculator subjects={subjects} />
 
-        {/* No lectures indicator */}
-        {!currentLecture && (
-          <View className="bg-white rounded-3xl border border-neutral-200 p-5 mx-4 mt-5 items-center">
-            <Text className="text-text-secondary text-sm">
-              No more lectures today
-            </Text>
+        {/* Ongoing / Upcoming Lectures */}
+        {dashboardLectures.length > 0 ? (
+          dashboardLectures.map((item, index) => (
+            <OngoingLectureCard
+              key={item.lecture.id}
+              lecture={item.lecture}
+              isOngoing={item.isOngoing}
+              onStatusChange={handleStatusChange}
+              className={`mx-4 ${index === 0 ? "mt-5" : "mt-3"}`}
+            />
+          ))
+        ) : (
+          <View
+            className="bg-white rounded-3xl p-4 mx-4 mt-5"
+            style={{ borderWidth: 1, borderStyle: "dashed", borderColor: "#e5e5e5" }}
+          >
+            <View className="flex-row items-center justify-between mb-2">
+              <Text className="text-text-secondary text-sm font-medium">No More Lectures</Text>
+            </View>
+            <Text className="text-text text-lg font-bold mb-2">All done for today</Text>
+            <View className="flex-row items-center gap-3">
+              <Text className="text-text-muted text-xs">You're free for the rest of the day 🎉</Text>
+            </View>
           </View>
         )}
 
@@ -120,6 +142,7 @@ export default function DashboardScreen() {
                 percentage={getAttendancePercentage(subject)}
                 attended={subject.attendedClasses}
                 total={subject.totalClasses}
+                onEdit={() => setEditingSubject(subject)}
               />
             )}
           />
@@ -130,6 +153,14 @@ export default function DashboardScreen() {
         visible={showAddSubject}
         onClose={() => setShowAddSubject(false)}
         onSave={handleAddSubject}
+      />
+
+      <EditSubjectModal
+        visible={editingSubject !== null}
+        subject={editingSubject}
+        onClose={() => setEditingSubject(null)}
+        onSave={handleSaveSubject}
+        onDelete={handleDeleteSubject}
       />
     </SafeAreaView>
   );

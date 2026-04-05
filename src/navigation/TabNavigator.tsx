@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, TouchableOpacity } from "react-native";
 import { createBottomTabNavigator, BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { Home, Calendar, User } from "lucide-react-native";
+import { Home, Calendar, User, Plus } from "lucide-react-native";
 import DashboardScreen from "../screens/DashboardScreen";
 import TodayScreen from "../screens/TodayScreen";
 import ProfileScreen from "../screens/ProfileScreen";
+import AddExtraClassModal from "../components/AddExtraClassModal";
+import { Lecture } from "../data/types";
 
 const Tab = createBottomTabNavigator();
 
@@ -14,12 +16,12 @@ const ICONS: Record<string, typeof Home> = {
   Profile: User,
 };
 
-function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
+function FloatingTabBar({ state, navigation, onAddPress }: BottomTabBarProps & { onAddPress: () => void }) {
   return (
     <View
       style={{
         position: "absolute",
-        bottom: 14,
+        bottom: 20,
         left: 14,
         right: 14,
         height: 56,
@@ -34,6 +36,7 @@ function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
         elevation: 12,
       }}
     >
+      {/* Tabs */}
       {state.routes.map((route, index) => {
         const focused = state.index === index;
         const Icon = ICONS[route.name];
@@ -44,25 +47,73 @@ function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
             key={route.key}
             onPress={() => navigation.navigate(route.name)}
             activeOpacity={0.7}
-            style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+            style={{
+              flex: 1,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: focused ? "rgba(77,197,145,0.12)" : "transparent",
+              borderRadius: 28,
+              marginHorizontal: 8,
+              paddingVertical: 12,
+            }}
           >
             <Icon size={20} color={color} />
           </TouchableOpacity>
         );
       })}
+
+      {/* Add button at end */}
+      <TouchableOpacity
+        onPress={onAddPress}
+        activeOpacity={0.85}
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 22,
+          backgroundColor: "#4dc591",
+          alignItems: "center",
+          justifyContent: "center",
+          marginRight: 8,
+          shadowColor: "#4dc591",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.4,
+          shadowRadius: 8,
+          elevation: 6,
+        }}
+      >
+        <Plus size={20} color="#fff" strokeWidth={2.5} />
+      </TouchableOpacity>
+
     </View>
   );
 }
 
 export default function TabNavigator() {
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  const handleAdd = (lecture: Lecture) => {
+    // TODO: propagate added lecture to TodayScreen state
+    console.log("Extra class added:", lecture);
+  };
+
   return (
-    <Tab.Navigator
-      tabBar={(props) => <FloatingTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
-    >
-      <Tab.Screen name="Dashboard" component={DashboardScreen} />
-      <Tab.Screen name="Today" component={TodayScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
-    </Tab.Navigator>
+    <>
+      <Tab.Navigator
+        tabBar={(props) => (
+          <FloatingTabBar {...props} onAddPress={() => setShowAddModal(true)} />
+        )}
+        screenOptions={{ headerShown: false }}
+      >
+        <Tab.Screen name="Dashboard" component={DashboardScreen} />
+        <Tab.Screen name="Today" component={TodayScreen} />
+        <Tab.Screen name="Profile" component={ProfileScreen} />
+      </Tab.Navigator>
+
+      <AddExtraClassModal
+        visible={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onAdd={handleAdd}
+      />
+    </>
   );
 }

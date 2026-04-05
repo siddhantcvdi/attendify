@@ -51,9 +51,9 @@ export default function HeroCard({
           percentage={percentage}
           size={80}
           strokeWidth={8}
-          color="#ffffff"
+          color="rgba(255,255,255,0.85)"
           backgroundColor="rgba(255,255,255,0.25)"
-          labelClassName="text-lg font-thin text-center text-white"
+          labelClassName="text-lg text-center text-white"
         />
       </View>
     </View>

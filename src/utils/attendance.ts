@@ -59,6 +59,34 @@ export function getOngoingOrNextLecture(
   return null;
 }
 
+export function getDashboardLectures(
+  lectures: Lecture[]
+): { lecture: Lecture; isOngoing: boolean }[] {
+  const currentMinutes = getCurrentMinutes();
+  const active = lectures.filter((l) => l.status !== "cancelled");
+
+  const ongoing = active.find((l) => {
+    const start = parseTime(l.startTime);
+    const end = parseTime(l.endTime);
+    return currentMinutes >= start && currentMinutes < end;
+  });
+
+  const upcoming = active
+    .filter((l) => parseTime(l.startTime) > currentMinutes)
+    .sort((a, b) => parseTime(a.startTime) - parseTime(b.startTime));
+
+  const result: { lecture: Lecture; isOngoing: boolean }[] = [];
+
+  if (ongoing) {
+    result.push({ lecture: ongoing, isOngoing: true });
+    if (upcoming.length > 0) result.push({ lecture: upcoming[0], isOngoing: false });
+  } else {
+    upcoming.slice(0, 2).forEach((l) => result.push({ lecture: l, isOngoing: false }));
+  }
+
+  return result;
+}
+
 export function getTodayProgress(lectures: Lecture[]): {
   attended: number;
   total: number;
