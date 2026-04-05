@@ -6,7 +6,12 @@ import DashboardScreen from "../screens/DashboardScreen";
 import TodayScreen from "../screens/TodayScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import AddExtraClassModal from "../components/AddExtraClassModal";
+import { useAttendance } from "../context/AttendanceContext";
 import { Lecture } from "../data/types";
+
+function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
 
 const Tab = createBottomTabNavigator();
 
@@ -90,10 +95,10 @@ function FloatingTabBar({ state, navigation, onAddPress }: BottomTabBarProps & {
 
 export default function TabNavigator() {
   const [showAddModal, setShowAddModal] = useState(false);
+  const { addExtraClass } = useAttendance();
 
   const handleAdd = (lecture: Lecture) => {
-    // TODO: propagate added lecture to TodayScreen state
-    console.log("Extra class added:", lecture);
+    addExtraClass(dateKey(new Date()), lecture);
   };
 
   return (

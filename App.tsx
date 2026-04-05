@@ -5,6 +5,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import TabNavigator from "./src/navigation/TabNavigator";
 import { ProfileProvider } from "./src/context/ProfileContext";
+import { SubjectsProvider } from "./src/context/SubjectsContext";
+import { AttendanceProvider } from "./src/context/AttendanceContext";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 
 const ONBOARDING_KEY = "onboarding_complete";
@@ -30,6 +32,8 @@ export default function App() {
   return (
   <SafeAreaProvider>
     <ProfileProvider>
+    <SubjectsProvider>
+    <AttendanceProvider>
       <NavigationContainer>
         <StatusBar style="dark" />
 
@@ -40,6 +44,8 @@ export default function App() {
         )}
 
       </NavigationContainer>
+    </AttendanceProvider>
+    </SubjectsProvider>
     </ProfileProvider>
   </SafeAreaProvider>
 );

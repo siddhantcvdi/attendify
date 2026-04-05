@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
 import { UserProfile } from "../data/types";
+import { Storage } from "../storage";
 
 const DEFAULT_PROFILE: UserProfile = {
   name: "Siddhant",
@@ -20,8 +21,18 @@ const ProfileContext = createContext<ProfileContextValue>({
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
 
+  useEffect(() => {
+    Storage.get<UserProfile>(Storage.KEYS.PROFILE).then((saved) => {
+      if (saved) setProfile(saved);
+    });
+  }, []);
+
   function updateProfile(patch: Partial<UserProfile>) {
-    setProfile((prev) => ({ ...prev, ...patch }));
+    setProfile((prev) => {
+      const next = { ...prev, ...patch };
+      Storage.set(Storage.KEYS.PROFILE, next);
+      return next;
+    });
   }
 
   return (

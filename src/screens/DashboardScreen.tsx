@@ -3,13 +3,14 @@ import { View, Text, ScrollView, FlatList, TouchableOpacity } from "react-native
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Plus } from "lucide-react-native";
 import { useProfile } from "../context/ProfileContext";
+import { useSubjects } from "../context/SubjectsContext";
+import { useAttendance } from "../context/AttendanceContext";
 import HeroCard from "../components/HeroCard";
 import OngoingLectureCard from "../components/OngoingLectureCard";
 import SubjectCard from "../components/SubjectCard";
 import AddSubjectScreen from "./AddSubjectScreen";
 import EditSubjectModal from "../components/EditSubjectModal";
 import BunkCalculator from "../components/BunkCalculator";
-import { subjects as initialSubjects } from "../data/mockData";
 import { getLecturesForDate } from "../data/scheduleData";
 import {
   getTodayAttendancePercentage,
@@ -17,7 +18,7 @@ import {
   getDashboardLectures,
   getAttendancePercentage,
 } from "../utils/attendance";
-import { AttendanceStatus, Subject } from "../data/types";
+import { AttendanceStatus, Lecture, Subject } from "../data/types";
 
 function getGreeting(): { text: string; emoji: string } {
   const hour = new Date().getHours();
@@ -27,35 +28,37 @@ function getGreeting(): { text: string; emoji: string } {
   return { text: "Burning midnight oil,", emoji: "🌙" };
 }
 
+function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
 export default function DashboardScreen() {
   const { profile } = useProfile();
+  const { subjects, addSubject, updateSubject, deleteSubject } = useSubjects();
+  const { statusOverrides, extraClasses, setStatus } = useAttendance();
   const { text: greetingText, emoji } = getGreeting();
-  const [lectures, setLectures] = useState(() => getLecturesForDate(new Date()));
-  const [subjects, setSubjects] = useState(initialSubjects);
   const [showAddSubject, setShowAddSubject] = useState(false);
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
+
+  const today = new Date();
+  const dk = dateKey(today);
+
+  const lectures: Lecture[] = useMemo(() => {
+    const base = getLecturesForDate(today);
+    const extras = extraClasses[dk] ?? [];
+    return [...base, ...extras].map((l) => {
+      const key = `${dk}:${l.id}`;
+      return key in statusOverrides ? { ...l, status: statusOverrides[key] } : l;
+    });
+  }, [dk, statusOverrides, extraClasses]);
 
   const todayPercentage = useMemo(() => getTodayAttendancePercentage(lectures), [lectures]);
   const { attended, total } = useMemo(() => getTodayProgress(lectures), [lectures]);
   const dashboardLectures = useMemo(() => getDashboardLectures(lectures), [lectures]);
 
   const handleStatusChange = useCallback((lectureId: string, status: AttendanceStatus) => {
-    setLectures((prev) =>
-      prev.map((l) => (l.id === lectureId ? { ...l, status } : l))
-    );
-  }, []);
-
-  const handleAddSubject = useCallback((subject: Subject) => {
-    setSubjects((prev) => [...prev, subject]);
-  }, []);
-
-  const handleDeleteSubject = useCallback((id: string) => {
-    setSubjects((prev) => prev.filter((s) => s.id !== id));
-  }, []);
-
-  const handleSaveSubject = useCallback((updated: Subject) => {
-    setSubjects((prev) => prev.map((s) => s.id === updated.id ? updated : s));
-  }, []);
+    setStatus(dk, lectureId, status);
+  }, [dk, setStatus]);
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
@@ -70,9 +73,7 @@ export default function DashboardScreen() {
             <Text style={{ fontSize: 24 }}>{emoji}</Text>
           </View>
           <View>
-            <Text className="text-text text-xs font-medium">
-              {greetingText}
-            </Text>
+            <Text className="text-text text-xs font-medium">{greetingText}</Text>
             <Text className="text-text text-2xl font-bold">{profile.name}</Text>
           </View>
         </View>
@@ -108,18 +109,14 @@ export default function DashboardScreen() {
               <Text className="text-text-secondary text-sm font-medium">No More Lectures</Text>
             </View>
             <Text className="text-text text-lg font-bold mb-2">All done for today</Text>
-            <View className="flex-row items-center gap-3">
-              <Text className="text-text-muted text-xs">You're free for the rest of the day 🎉</Text>
-            </View>
+            <Text className="text-text-muted text-xs">You're free for the rest of the day 🎉</Text>
           </View>
         )}
 
         {/* Subjects Overview */}
         <View className="mt-6 mb-2">
           <View className="flex-row items-center justify-between px-5 mb-3">
-            <Text className="text-text text-lg font-bold">
-              Subjects Overview
-            </Text>
+            <Text className="text-text text-lg font-bold">Subjects Overview</Text>
             <TouchableOpacity
               onPress={() => setShowAddSubject(true)}
               activeOpacity={0.7}
@@ -152,15 +149,15 @@ export default function DashboardScreen() {
       <AddSubjectScreen
         visible={showAddSubject}
         onClose={() => setShowAddSubject(false)}
-        onSave={handleAddSubject}
+        onSave={addSubject}
       />
 
       <EditSubjectModal
         visible={editingSubject !== null}
         subject={editingSubject}
         onClose={() => setEditingSubject(null)}
-        onSave={handleSaveSubject}
-        onDelete={handleDeleteSubject}
+        onSave={updateSubject}
+        onDelete={deleteSubject}
       />
     </SafeAreaView>
   );
