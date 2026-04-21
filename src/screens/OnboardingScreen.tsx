@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Animated,
   Alert,
+  Modal,
 } from "react-native";
 import GlobeIllustration from "../../assets/image.svg";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -32,6 +33,8 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   const { updateProfile } = useProfile();
   const scrollRef = useRef<ScrollView>(null);
   const webRef = useRef<WebView>(null);
+  const webLoaded = useRef(false);
+  const pendingFlyTo = useRef<{ lat: number; lng: number } | null>(null);
 
   const [step, setStep] = useState(0);
 
@@ -80,6 +83,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   const [locating, setLocating] = useState(false);
   const [autoAttendance, setAutoAttendance] = useState(false);
   const [togglingAuto, setTogglingAuto] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
 
   // Build HTML once — never rebuild to avoid WebView reload on pin/radius change
   const mapHtml = useMemo(() => buildLeafletHTML(20.5937, 78.9629, null, null, 50), []);
@@ -93,17 +97,27 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
     setLocating(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Permission Denied", "Please enable location access in Settings to use this feature.");
-        return;
-      }
+      if (status !== "granted") return;
       const last = await Location.getLastKnownPositionAsync();
       const loc = last ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const coord = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
       setPin(coord);
-      webRef.current?.injectJavaScript(`flyTo(${coord.latitude}, ${coord.longitude}); true;`);
+      if (webLoaded.current) {
+        webRef.current?.injectJavaScript(`flyTo(${coord.latitude}, ${coord.longitude}); true;`);
+      } else {
+        pendingFlyTo.current = { lat: coord.latitude, lng: coord.longitude };
+      }
     } finally {
       setLocating(false);
+    }
+  }
+
+  function handleWebLoad() {
+    webLoaded.current = true;
+    if (pendingFlyTo.current) {
+      const { lat, lng } = pendingFlyTo.current;
+      webRef.current?.injectJavaScript(`flyTo(${lat}, ${lng}); true;`);
+      pendingFlyTo.current = null;
     }
   }
 
@@ -117,12 +131,39 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   async function handleToggleAutoAttendance() {
     if (autoAttendance) {
       setAutoAttendance(false);
+      setShowLocationModal(false);
+      webLoaded.current = false;
+      pendingFlyTo.current = null;
       return;
     }
+
+    const shouldContinue = await new Promise<boolean>((resolve) => {
+      Alert.alert(
+        "Permissions needed",
+        "Auto Attendance checks your location at class time to mark you present or absent.\n\n• When asked for location access, tap \"Allow all the time\" — this lets it work even when the app is closed.\n• Notifications are used to trigger the check at the right moment.",
+        [
+          { text: "Not Now", style: "cancel", onPress: () => resolve(false) },
+          { text: "Continue", onPress: () => resolve(true) },
+        ]
+      );
+    });
+
+    if (!shouldContinue) return;
+
     setTogglingAuto(true);
     const granted = await requestAutoAttendancePermissions();
     setTogglingAuto(false);
-    if (granted) setAutoAttendance(true);
+    if (granted) {
+      setAutoAttendance(true);
+      setShowLocationModal(true);
+      handleUseMyLocation();
+    }
+  }
+
+  function handleCloseLocationModal() {
+    webLoaded.current = false;
+    pendingFlyTo.current = null;
+    setShowLocationModal(false);
   }
 
   function handleFinish() {
@@ -133,8 +174,6 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
     updateProfile({ name: finalName, minAttendance, locations, autoAttendance });
     onComplete();
   }
-
-  const [outerScrollEnabled, setOuterScrollEnabled] = useState(true);
 
   const needsLocation = autoAttendance && !pin;
   const canFinish = name.trim().length > 0 && !needsLocation;
@@ -205,178 +244,202 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
 
         {/* Page 2 — Setup */}
         <KeyboardAvoidingView
-          style={{ width }}
+          style={{ width, flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
-            keyboardShouldPersistTaps="handled"
-            scrollEnabled={outerScrollEnabled}
-          >
-            <Text className="text-text text-2xl font-bold mb-1">Let's set you up</Text>
-            <Text className="text-text-muted text-sm mb-6">Fill in a few details to get started.</Text>
+          <View style={{ flex: 1 }}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Text className="text-text text-2xl font-bold mb-1">Let's set you up</Text>
+              <Text className="text-text-muted text-sm mb-6">Fill in a few details to get started.</Text>
 
-            {/* Name */}
-            <View className="bg-white rounded-3xl border border-neutral-200 p-4 mb-4">
-              <Text className="text-text text-xs font-medium mb-1">Your Name</Text>
-              <TextInput
-                value={name}
-                onChangeText={setName}
-                placeholder="e.g. Alex Johnson"
-                placeholderTextColor="#bcc1cd"
-                returnKeyType="done"
-                className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm"
-                style={{ fontFamily: "Poppins_400Regular" }}
-              />
-            </View>
-
-            {/* Min attendance */}
-            <View className="bg-white rounded-3xl border border-neutral-200 p-4 mb-4">
-              <View className="flex-row items-center justify-between">
-                <View className="flex-1 mr-4">
-                  <Text className="text-text text-xs font-medium mb-0.5">Min. Attendance</Text>
-                  <Text className="text-text-muted text-xs">Warn when a subject drops below this</Text>
-                </View>
-                <View className="flex-row items-center gap-2">
-                  <TouchableOpacity
-                    onPress={() => minAttendance > 50 && setMinAttendance(minAttendance - 5)}
-                    activeOpacity={0.7}
-                    className="w-8 h-8 rounded-xl bg-surface border border-neutral-200 items-center justify-center"
-                  >
-                    <Minus size={13} color="#5f8a85" />
-                  </TouchableOpacity>
-                  <Text className="text-text text-sm font-bold w-10 text-center">
-                    {minAttendance}%
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => minAttendance < 100 && setMinAttendance(minAttendance + 5)}
-                    activeOpacity={0.7}
-                    className="w-8 h-8 rounded-xl bg-surface border border-neutral-200 items-center justify-center"
-                  >
-                    <Plus size={13} color="#5f8a85" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-
-            {/* Map */}
-            <View className="bg-white rounded-3xl border border-neutral-200 mb-4" style={{ overflow: "hidden" }}>
-              <View className="p-4 pb-0">
-                <Text className="text-text text-xs font-medium mb-0.5">Class Location</Text>
-                <Text className="text-text-muted text-xs mb-3">Tap the map to drop a pin where your classes are held</Text>
-              </View>
-
-              <View
-                style={{ height: 200 }}
-                onTouchStart={() => setOuterScrollEnabled(false)}
-                onTouchEnd={() => setOuterScrollEnabled(true)}
-                onTouchCancel={() => setOuterScrollEnabled(true)}
-              >
-                <WebView
-                  ref={webRef}
-                  style={{ flex: 1 }}
-                  source={{ html: mapHtml }}
-                  onMessage={handleWebMessage}
-                  javaScriptEnabled
-                  originWhitelist={["*"]}
-                  scrollEnabled={false}
+              {/* Name */}
+              <View className="bg-white rounded-3xl border border-neutral-200 p-4 mb-4">
+                <Text className="text-text text-xs font-medium mb-1">Your Name</Text>
+                <TextInput
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="e.g. Alex Johnson"
+                  placeholderTextColor="#bcc1cd"
+                  returnKeyType="done"
+                  className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm"
+                  style={{ fontFamily: "Poppins_400Regular" }}
                 />
-
-                <TouchableOpacity
-                  onPress={handleUseMyLocation}
-                  activeOpacity={0.8}
-                  className="absolute top-2 right-2 bg-white rounded-2xl px-3 py-1.5 flex-row items-center"
-                  style={{ shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 4 }}
-                >
-                  {locating ? (
-                    <ActivityIndicator size="small" color="#4dc591" />
-                  ) : (
-                    <Locate size={13} color="#4dc591" />
-                  )}
-                  <Text className="text-text text-xs font-semibold ml-1">My location</Text>
-                </TouchableOpacity>
               </View>
 
-              {pin && (
-                <View className="p-4 pt-3">
-                  <View className="flex-row items-center justify-between mb-1">
-                    <Text className="text-text text-xs font-medium">Radius</Text>
-                    <Text className="text-text text-xs font-bold">{radius} m</Text>
+              {/* Min attendance */}
+              <View className="bg-white rounded-3xl border border-neutral-200 p-4 mb-4">
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-1 mr-4">
+                    <Text className="text-text text-xs font-medium mb-0.5">Min. Attendance</Text>
+                    <Text className="text-text-muted text-xs">Warn when a subject drops below this</Text>
                   </View>
-                  <Slider
-                    style={{ width: "100%", height: 32 }}
-                    minimumValue={10}
-                    maximumValue={100}
-                    step={5}
-                    value={radius}
-                    onValueChange={(r) => { setRadius(r); webRef.current?.injectJavaScript(`updateRadius(${r}); true;`); }}
-                    minimumTrackTintColor="#4dc591"
-                    maximumTrackTintColor="#e5e7eb"
-                    thumbTintColor="#4dc591"
-                  />
+                  <View className="flex-row items-center gap-2">
+                    <TouchableOpacity
+                      onPress={() => minAttendance > 50 && setMinAttendance(minAttendance - 5)}
+                      activeOpacity={0.7}
+                      className="w-8 h-8 rounded-xl bg-surface border border-neutral-200 items-center justify-center"
+                    >
+                      <Minus size={13} color="#5f8a85" />
+                    </TouchableOpacity>
+                    <Text className="text-text text-sm font-bold w-10 text-center">
+                      {minAttendance}%
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => minAttendance < 100 && setMinAttendance(minAttendance + 5)}
+                      activeOpacity={0.7}
+                      className="w-8 h-8 rounded-xl bg-surface border border-neutral-200 items-center justify-center"
+                    >
+                      <Plus size={13} color="#5f8a85" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              )}
-
-              {!pin && (
-                <View className="flex-row items-center p-4 pt-3">
-                  <MapPin size={13} color="#bcc1cd" />
-                  <Text className="text-text-muted text-xs ml-1.5">No pin dropped — you can set this later in Settings</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Auto Attendance toggle */}
-            <View className={`bg-white rounded-3xl border p-4 mb-4 ${needsLocation ? "border-amber-400" : "border-neutral-200"}`}>
-              <View className="flex-row items-center justify-between">
-                <View className="flex-1 mr-4">
-                  <Text className="text-text text-xs font-medium mb-0.5">Auto Attendance</Text>
-                  <Text className="text-text-muted text-xs">
-                    Automatically mark attendance based on your location at class time
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={handleToggleAutoAttendance}
-                  disabled={togglingAuto}
-                  activeOpacity={0.7}
-                  style={{
-                    width: 48,
-                    height: 28,
-                    borderRadius: 14,
-                    backgroundColor: autoAttendance ? "#4dc591" : "#e2e8f0",
-                    justifyContent: "center",
-                    paddingHorizontal: 2,
-                  }}
-                >
-                  {togglingAuto ? (
-                    <ActivityIndicator size="small" color={autoAttendance ? "#fff" : "#94a9a6"} />
-                  ) : (
-                    <View
-                      style={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: 12,
-                        backgroundColor: "#fff",
-                        alignSelf: autoAttendance ? "flex-end" : "flex-start",
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 1 },
-                        shadowOpacity: 0.15,
-                        shadowRadius: 2,
-                        elevation: 2,
-                      }}
-                    />
-                  )}
-                </TouchableOpacity>
               </View>
-              {needsLocation && (
-                <Text className="text-amber-600 text-xs mt-2">
-                  Drop a pin on the map above to use auto attendance
-                </Text>
-              )}
-            </View>
-          </ScrollView>
+
+              {/* Auto Attendance toggle */}
+              <View className="bg-white rounded-3xl border border-neutral-200 p-4">
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-1 mr-4">
+                    <Text className="text-text text-xs font-medium mb-0.5">Auto Attendance</Text>
+                    <Text className="text-text-muted text-xs">
+                      Automatically mark attendance based on your location at class time
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={handleToggleAutoAttendance}
+                    disabled={togglingAuto}
+                    activeOpacity={0.7}
+                    style={{
+                      width: 48,
+                      height: 28,
+                      borderRadius: 14,
+                      backgroundColor: autoAttendance ? "#4dc591" : "#e2e8f0",
+                      justifyContent: "center",
+                      paddingHorizontal: 2,
+                    }}
+                  >
+                    {togglingAuto ? (
+                      <ActivityIndicator size="small" color={autoAttendance ? "#fff" : "#94a9a6"} />
+                    ) : (
+                      <View
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 12,
+                          backgroundColor: "#fff",
+                          alignSelf: autoAttendance ? "flex-end" : "flex-start",
+                          shadowColor: "#000",
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: 0.15,
+                          shadowRadius: 2,
+                          elevation: 2,
+                        }}
+                      />
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {autoAttendance && (
+                  <TouchableOpacity
+                    onPress={() => { setShowLocationModal(true); handleUseMyLocation(); }}
+                    activeOpacity={0.7}
+                    className="flex-row items-center mt-3 pt-3 border-t border-neutral-100"
+                  >
+                    <MapPin size={12} color={pin ? "#4dc591" : "#f59e0b"} />
+                    <Text className="text-xs ml-1.5 flex-1" style={{ color: pin ? "#4dc591" : "#f59e0b" }}>
+                      {pin ? "Location set — tap to change" : "Tap to set your class location"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </ScrollView>
+          </View>
         </KeyboardAvoidingView>
       </ScrollView>
+
+      {/* Location modal */}
+      <Modal visible={showLocationModal} animationType="slide" onRequestClose={handleCloseLocationModal}>
+        <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
+          <View className="flex-row items-center justify-between px-5 py-4 border-b border-neutral-100">
+            <Text className="text-text text-lg font-bold">Class Location</Text>
+            <TouchableOpacity
+              onPress={handleCloseLocationModal}
+              activeOpacity={0.7}
+              className="w-9 h-9 rounded-full bg-gray-100 items-center justify-center"
+            >
+              <Text style={{ fontSize: 16, color: "#5f8a85" }}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <WebView
+              ref={webRef}
+              style={{ flex: 1 }}
+              source={{ html: mapHtml }}
+              onMessage={handleWebMessage}
+              onLoad={handleWebLoad}
+              javaScriptEnabled
+              originWhitelist={["*"]}
+              scrollEnabled={false}
+            />
+
+            <TouchableOpacity
+              onPress={handleUseMyLocation}
+              activeOpacity={0.8}
+              className="absolute top-3 right-3 bg-white rounded-2xl px-3 py-2 flex-row items-center"
+              style={{ shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6, elevation: 4 }}
+            >
+              {locating ? (
+                <ActivityIndicator size="small" color="#4dc591" />
+              ) : (
+                <Locate size={14} color="#4dc591" />
+              )}
+              <Text className="text-text text-xs font-semibold ml-1.5">My location</Text>
+            </TouchableOpacity>
+
+            {!pin && (
+              <View style={{ pointerEvents: "none", position: "absolute", bottom: 16, left: 0, right: 0, alignItems: "center" }}>
+                <View className="bg-black/50 rounded-2xl px-4 py-2">
+                  <Text className="text-white text-xs font-medium">Tap on the map to drop a pin</Text>
+                </View>
+              </View>
+            )}
+          </View>
+
+          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-4">
+            {pin && (
+              <>
+                <View className="flex-row items-center justify-between mb-2">
+                  <Text className="text-text text-sm font-medium">Radius</Text>
+                  <Text className="text-text text-base font-bold">{radius} <Text className="text-text-muted text-sm font-normal">m</Text></Text>
+                </View>
+                <Slider
+                  style={{ width: "100%", height: 36, marginBottom: 12 }}
+                  minimumValue={10}
+                  maximumValue={100}
+                  step={5}
+                  value={radius}
+                  onValueChange={(r) => { setRadius(r); webRef.current?.injectJavaScript(`updateRadius(${r}); true;`); }}
+                  minimumTrackTintColor="#4dc591"
+                  maximumTrackTintColor="#e5e7eb"
+                  thumbTintColor="#4dc591"
+                />
+              </>
+            )}
+            <TouchableOpacity
+              onPress={handleCloseLocationModal}
+              activeOpacity={0.8}
+              className="rounded-3xl py-4 items-center"
+              style={{ backgroundColor: "#4dc591", shadowColor: "#4dc591", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8 }}
+            >
+              <Text className="text-white text-base font-bold">{pin ? "Confirm Location" : "Skip for now"}</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
 
       {/* Bottom button */}
       <Animated.View className="px-6 pb-8 pt-2 absolute bottom-0 left-0 right-0" style={{ opacity: buttonOpacity, transform: [{ translateY: buttonY }] }}>

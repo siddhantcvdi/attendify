@@ -146,9 +146,9 @@ async function markAttendanceIfNeeded(
  */
 export async function checkAndMarkAttendance(): Promise<void> {
   try {
-    const pos =
-      (await Location.getLastKnownPositionAsync()) ??
-      (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+    // Use cached location only if < 3 min old; otherwise get a fresh fix
+    const last = await Location.getLastKnownPositionAsync({ maxAge: 3 * 60 * 1000 });
+    const pos = last ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
     if (!pos) return;
     await markAttendanceIfNeeded(pos.coords.latitude, pos.coords.longitude);
   } catch {}
@@ -224,7 +224,6 @@ export async function scheduleWeekAhead(
         sound: true,
       };
 
-      // At exact start time
       const startTime = new Date(date);
       startTime.setHours(h, m, 0, 0);
       if (startTime.getTime() > now) {
@@ -233,20 +232,6 @@ export async function scheduleWeekAhead(
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.DATE,
             date: startTime,
-            channelId: CHANNEL_ID,
-          },
-        });
-      }
-
-      // At start + 5 min
-      const laterTime = new Date(date);
-      laterTime.setHours(h, m + 5, 0, 0);
-      if (laterTime.getTime() > now) {
-        await Notifications.scheduleNotificationAsync({
-          content,
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DATE,
-            date: laterTime,
             channelId: CHANNEL_ID,
           },
         });

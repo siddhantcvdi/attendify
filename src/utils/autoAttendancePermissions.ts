@@ -1,6 +1,6 @@
 import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
-import { Alert, Linking } from "react-native";
+import { Alert, Linking, Platform } from "react-native";
 
 /**
  * Request all permissions needed for auto-attendance:
@@ -49,6 +49,23 @@ export async function requestAutoAttendancePermissions(): Promise<boolean> {
   if (notif !== "granted") {
     Alert.alert("Notifications Required", "Notification permission is needed to trigger background attendance checks.");
     return false;
+  }
+
+  // 4. Exact alarms (Android 12+) — needed for on-time attendance notifications
+  if (Platform.OS === "android") {
+    const perms = await Notifications.getPermissionsAsync();
+    if (perms.android?.canScheduleExactNotifications === false) {
+      await new Promise<void>((resolve) => {
+        Alert.alert(
+          "Exact Alarms Needed",
+          'For precise attendance timing, enable "Alarms & reminders" for Attendify in Settings → Special app access.',
+          [
+            { text: "Not Now", style: "cancel", onPress: () => resolve() },
+            { text: "Open Settings", onPress: async () => { await Linking.openSettings(); resolve(); } },
+          ]
+        );
+      });
+    }
   }
 
   return true;
