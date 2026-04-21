@@ -44,7 +44,12 @@
       "package": "com.siddhantcvdi.attendify",
       "permissions": [
         "android.permission.SCHEDULE_EXACT_ALARM",
-        "android.permission.USE_EXACT_ALARM"
+        "android.permission.USE_EXACT_ALARM",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ]
     },
     "web": {
@@ -52,8 +57,9 @@
     },
     "extra": {
       "eas": {
-        "projectId": "e0229c30-2332-4439-b1f2-aeaf31ce83bb"
+        "projectId": "05b2c935-2a16-4cf3-aaa3-0f3c558e3ead"
       }
-    }
+    },
+    "owner": "ankitvashisth06"
   }
 }
