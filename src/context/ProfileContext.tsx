@@ -3,9 +3,10 @@ import { UserProfile } from "../data/types";
 import { Storage } from "../storage";
 
 const DEFAULT_PROFILE: UserProfile = {
-  name: "Siddhant",
+  name: "",
   minAttendance: 75,
-  classLocation: null,
+  locations: [],
+  autoAttendance: false,
 };
 
 interface ProfileContextValue {
@@ -24,9 +25,9 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
 
   useEffect(() => {
-    Storage.get<UserProfile>(Storage.KEYS.PROFILE).then((saved) => {
-      if (saved) setProfile(saved);
-    });
+    Storage.get<UserProfile>(Storage.KEYS.PROFILE)
+      .then((saved) => { if (saved) setProfile({ ...DEFAULT_PROFILE, ...saved }); })
+      .catch(() => {});
   }, []);
 
   function updateProfile(patch: Partial<UserProfile>) {

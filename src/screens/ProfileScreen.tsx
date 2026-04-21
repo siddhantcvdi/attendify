@@ -8,12 +8,10 @@ import {
   Alert,
   Share,
   Modal,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MapPin, ChevronRight, Minus, Plus, BookOpen, Upload, Download, Trash2, RefreshCw } from "lucide-react-native";
+import { MapPin, ChevronRight, Minus, Plus, BookOpen, Upload, Download, Trash2, RefreshCw, Pencil, LocateFixed } from "lucide-react-native";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import type { FirestoreError } from "firebase/firestore";
 import { useProfile } from "../context/ProfileContext";
@@ -21,9 +19,10 @@ import { useSubjects } from "../context/SubjectsContext";
 import { useSchedule } from "../context/ScheduleContext";
 import { useAppReset } from "../context/AppResetContext";
 import LocationSetupScreen from "./LocationSetupScreen";
-import { ClassLocation, Lecture, Subject } from "../data/types";
+import { NamedLocation, Lecture, Subject } from "../data/types";
 import { ensureFirestoreConfigured } from "../services/firebase";
 import { Storage } from "../storage";
+import { requestAutoAttendancePermissions } from "../utils/autoAttendancePermissions";
 
 type ScheduleTemplate = Omit<Lecture, "id" | "status">;
 type WeekdaySchedules = Record<number, ScheduleTemplate[]>;
@@ -32,28 +31,27 @@ interface TimetablePayload {
   version: "1";
   subjects: Subject[];
   schedule: WeekdaySchedules;
+  locations?: NamedLocation[];
 }
 
-const TIMETABLE_EXPORT_CODE_KEY = "@lectur:timetable_export_code";
+const TIMETABLE_EXPORT_CODE_KEY = "@attendify:timetable_export_code";
 
 function getFirestoreErrorMessage(error: unknown): string {
-  const fallback = "Unexpected error while contacting Firestore.";
+  const fallback = "Something went wrong. Please try again.";
   if (!error || typeof error !== "object") return fallback;
 
   const firestoreError = error as Partial<FirestoreError>;
   switch (firestoreError.code) {
     case "permission-denied":
-      return "Firestore denied access. Update rules to allow reads/writes for timetable_exports.";
+      return "Access denied. Please try again later.";
     case "failed-precondition":
-      return "Firestore is not fully enabled for this project yet. Open Firebase Console and create the Firestore database.";
+      return "Service not ready. Please try again later.";
     case "unavailable":
-      return "Firestore is currently unavailable. Check internet and retry.";
+      return "Service unavailable. Check your internet and retry.";
     case "unauthenticated":
-      return "This operation requires authentication in your current Firestore rules.";
+      return "Authentication required. Please try again.";
     default:
-      return typeof firestoreError.message === "string" && firestoreError.message.length > 0
-        ? firestoreError.message
-        : fallback;
+      return fallback;
   }
 }
 
@@ -79,16 +77,18 @@ export default function ProfileScreen() {
   const { resetApp } = useAppReset();
   const [name, setName] = useState(profile.name);
   const [showLocationSetup, setShowLocationSetup] = useState(false);
+  const [editingLocation, setEditingLocation] = useState<NamedLocation | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importCode, setImportCode] = useState("");
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [togglingAuto, setTogglingAuto] = useState(false);
 
   async function getOrCreateExportCode(): Promise<string> {
     const existing = await Storage.get<string>(TIMETABLE_EXPORT_CODE_KEY);
     if (existing && existing.trim().length > 0) return existing;
 
-    const code = `lectur_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const code = `attendify_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     await Storage.set(TIMETABLE_EXPORT_CODE_KEY, code);
     return code;
   }
@@ -102,8 +102,9 @@ export default function ProfileScreen() {
 
       const payload: TimetablePayload = {
         version: "1",
-        subjects,
+        subjects: subjects.map((s) => ({ ...s, attendedClasses: 0, totalClasses: 0 })),
         schedule: weekdaySchedules,
+        locations: profile.locations ?? [],
       };
 
       const code = await getOrCreateExportCode();
@@ -113,10 +114,9 @@ export default function ProfileScreen() {
       });
 
       await Share.share({
-        message: `Attendify timetable code: ${code}`,
+        message: `Here's my Attendify timetable code:\n\n${code}\n\nOpen Attendify → Settings → Import Timetable and paste this code.`,
         title: "Attendify Timetable",
       });
-      Alert.alert("Exported", `Share this code to import on another device:\n\n${code}`);
     } catch (e) {
       Alert.alert("Export failed", getFirestoreErrorMessage(e));
     } finally {
@@ -146,12 +146,21 @@ export default function ProfileScreen() {
       const raw = snap.data() as Partial<TimetablePayload>;
       const schedule = normalizeSchedule(raw.schedule);
       if (raw.version !== "1" || !Array.isArray(raw.subjects) || !schedule) {
-        Alert.alert("Invalid data", "The Firestore entry is not a valid Attendify timetable.");
+        Alert.alert("Invalid code", "This code doesn't contain a valid Attendify timetable.");
         return;
       }
 
       setSchedule(schedule);
-      importSubjects(raw.subjects as Subject[]);
+      // Always zero out attendance on import — only the timetable structure is shared
+      const cleanSubjects = (raw.subjects as Subject[]).map((s) => ({
+        ...s,
+        attendedClasses: 0,
+        totalClasses: 0,
+      }));
+      importSubjects(cleanSubjects);
+      if (Array.isArray(raw.locations) && raw.locations.length > 0) {
+        updateProfile({ locations: raw.locations as NamedLocation[] });
+      }
       setImportCode("");
       setShowImportModal(false);
       Alert.alert("Imported", "Timetable imported successfully.");
@@ -171,6 +180,24 @@ export default function ProfileScreen() {
     else setName(profile.name);
   }
 
+  async function handleToggleAutoAttendance() {
+    if (profile.autoAttendance) {
+      updateProfile({ autoAttendance: false });
+      return;
+    }
+    if (!profile.locations || profile.locations.length === 0) {
+      Alert.alert(
+        "Location Required",
+        "Add a class location first before enabling auto attendance.",
+      );
+      return;
+    }
+    setTogglingAuto(true);
+    const granted = await requestAutoAttendancePermissions();
+    setTogglingAuto(false);
+    if (granted) updateProfile({ autoAttendance: true });
+  }
+
   function incrementAttendance() {
     if (profile.minAttendance < 100)
       updateProfile({ minAttendance: profile.minAttendance + 5 });
@@ -181,8 +208,25 @@ export default function ProfileScreen() {
       updateProfile({ minAttendance: profile.minAttendance - 5 });
   }
 
-  function handleSaveLocation(loc: ClassLocation) {
-    updateProfile({ classLocation: loc });
+  function handleSaveLocation(loc: NamedLocation) {
+    const existing = profile.locations ?? [];
+    const idx = existing.findIndex((l) => l.id === loc.id);
+    const next = idx >= 0
+      ? existing.map((l) => (l.id === loc.id ? loc : l))
+      : [...existing, loc];
+    updateProfile({ locations: next });
+    setEditingLocation(null);
+  }
+
+  function handleDeleteLocation(id: string) {
+    Alert.alert("Remove Location", "Remove this location?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () => updateProfile({ locations: (profile.locations ?? []).filter((l) => l.id !== id) }),
+      },
+    ]);
   }
 
   function handleClearTimetable() {
@@ -217,8 +261,6 @@ export default function ProfileScreen() {
       ]
     );
   }
-
-  const loc = profile.classLocation;
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
@@ -284,6 +326,55 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
           </View>
+
+          <View className="h-px bg-neutral-100 mx-1 my-3" />
+
+          {/* Auto Attendance toggle */}
+          <View className="flex-row items-center justify-between">
+            <View className="flex-row items-center flex-1 mr-4">
+              <View className="w-9 h-9 rounded-xl bg-[#4dc591]/15 items-center justify-center mr-3">
+                <LocateFixed size={16} color="#4dc591" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-text text-sm font-semibold">Auto Attendance</Text>
+                <Text className="text-text-muted text-xs mt-0.5">
+                  Mark attendance based on location at class time
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={handleToggleAutoAttendance}
+              disabled={togglingAuto}
+              activeOpacity={0.7}
+              style={{
+                width: 48,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: profile.autoAttendance ? "#4dc591" : "#e2e8f0",
+                justifyContent: "center",
+                paddingHorizontal: 2,
+              }}
+            >
+              {togglingAuto ? (
+                <ActivityIndicator size="small" color={profile.autoAttendance ? "#fff" : "#94a9a6"} />
+              ) : (
+                <View
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
+                    backgroundColor: "#fff",
+                    alignSelf: profile.autoAttendance ? "flex-end" : "flex-start",
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 2,
+                    elevation: 2,
+                  }}
+                />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Timetable */}
@@ -300,7 +391,7 @@ export default function ProfileScreen() {
               </View>
               <View>
                 <Text className="text-text text-sm font-semibold">Import Timetable</Text>
-                <Text className="text-text-muted text-xs mt-0.5">Load using Lectur code</Text>
+                <Text className="text-text-muted text-xs mt-0.5">Load using Attendify code</Text>
               </View>
             </View>
             <ChevronRight size={16} color="#bcc1cd" />
@@ -327,31 +418,80 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Class Location */}
-        <Text className="text-text text-lg font-bold px-5 mb-3">Class Location</Text>
-        <View className="bg-white rounded-3xl border border-neutral-200 mx-4 overflow-hidden">
+        {/* Class Locations */}
+        <View className="flex-row items-center justify-between px-5 mb-3">
+          <Text className="text-text text-lg font-bold">Class Locations</Text>
           <TouchableOpacity
-            onPress={() => setShowLocationSetup(true)}
+            onPress={() => { setEditingLocation(null); setShowLocationSetup(true); }}
             activeOpacity={0.7}
-            className="flex-row items-center justify-between p-4"
+            className="w-8 h-8 rounded-xl bg-[#4dc591]/20 items-center justify-center"
           >
-            <View className="flex-row items-center flex-1 mr-3">
-              <View className="w-9 h-9 rounded-xl bg-surface items-center justify-center mr-3">
-                <MapPin size={16} color={loc ? "#4dc591" : "#5f8a85"} />
-              </View>
-              <View className="flex-1">
-                <Text className="text-text text-sm font-semibold">
-                  {loc ? "Location set" : "Set location"}
-                </Text>
-                <Text className="text-text-muted text-xs mt-0.5">
-                  {loc
-                    ? `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)} · ${loc.radius} m`
-                    : "Where your classes are held"}
-                </Text>
-              </View>
-            </View>
-            <ChevronRight size={16} color="#bcc1cd" />
+            <Plus size={16} color="#4dc591" />
           </TouchableOpacity>
+        </View>
+        <View className="bg-white rounded-3xl border border-neutral-200 mx-4 overflow-hidden">
+          {(profile.locations ?? []).length === 0 ? (
+            <TouchableOpacity
+              onPress={() => { setEditingLocation(null); setShowLocationSetup(true); }}
+              activeOpacity={0.7}
+              className="flex-row items-center justify-between p-4"
+            >
+              <View className="flex-row items-center flex-1 mr-3">
+                <View className="w-9 h-9 rounded-xl bg-surface items-center justify-center mr-3">
+                  <MapPin size={16} color="#5f8a85" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-text text-sm font-semibold">Add a location</Text>
+                  <Text className="text-text-muted text-xs mt-0.5">Where your classes are held</Text>
+                </View>
+              </View>
+              <ChevronRight size={16} color="#bcc1cd" />
+            </TouchableOpacity>
+          ) : (
+            (profile.locations ?? []).map((loc, idx) => (
+              <React.Fragment key={loc.id}>
+                {idx > 0 && <View className="h-px bg-neutral-100 mx-4" />}
+                <View className="flex-row items-center justify-between px-4 py-3">
+                  <View className="flex-row items-center flex-1 mr-3">
+                    <View className="w-9 h-9 rounded-xl bg-surface items-center justify-center mr-3">
+                      <MapPin size={16} color={idx === 0 ? "#4dc591" : "#5f8a85"} />
+                    </View>
+                    <View className="flex-1">
+                      <View className="flex-row items-center gap-2">
+                        <Text className="text-text text-sm font-semibold">{loc.name}</Text>
+                        {idx === 0 && (
+                          <View className="bg-[#4dc591]/15 rounded-lg px-1.5 py-0.5">
+                            <Text className="text-[#4dc591] text-xs font-semibold">Default</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text className="text-text-muted text-xs mt-0.5">
+                        {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)} · {loc.radius} m
+                      </Text>
+                    </View>
+                  </View>
+                  <View className="flex-row items-center gap-2">
+                    <TouchableOpacity
+                      onPress={() => { setEditingLocation(loc); setShowLocationSetup(true); }}
+                      activeOpacity={0.7}
+                      className="w-8 h-8 rounded-full bg-surface items-center justify-center"
+                    >
+                      <Pencil size={13} color="#5f8a85" />
+                    </TouchableOpacity>
+                    {idx > 0 && (
+                      <TouchableOpacity
+                        onPress={() => handleDeleteLocation(loc.id)}
+                        activeOpacity={0.7}
+                        className="w-8 h-8 rounded-full bg-[#ff7648]/10 items-center justify-center"
+                      >
+                        <Trash2 size={13} color="#ff7648" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              </React.Fragment>
+            ))
+          )}
         </View>
 
         {/* Reset */}
@@ -397,26 +537,22 @@ export default function ProfileScreen() {
 
       <LocationSetupScreen
         visible={showLocationSetup}
-        onClose={() => setShowLocationSetup(false)}
+        onClose={() => { setShowLocationSetup(false); setEditingLocation(null); }}
         onSave={handleSaveLocation}
-        initialLocation={profile.classLocation}
+        initialLocation={editingLocation}
       />
 
       <Modal
         visible={showImportModal}
-        animationType="slide"
+        animationType="fade"
         transparent
         onRequestClose={() => setShowImportModal(false)}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          className="flex-1 justify-end"
-        >
-          <View className="flex-1 bg-black/40" />
-          <View className="bg-white rounded-t-3xl px-5 pt-5 pb-6">
-            <Text className="text-text text-lg font-bold">Import from Firestore</Text>
+        <View className="flex-1 bg-black/40 justify-center px-6">
+          <View className="bg-white rounded-3xl px-5 pt-5 pb-6">
+            <Text className="text-text text-lg font-bold">Import Timetable</Text>
             <Text className="text-text-muted text-sm mt-1 mb-4">
-              Enter the code generated during export.
+              Enter the code shared by your friend.
             </Text>
 
             <View className="border border-neutral-200 rounded-2xl px-3 py-1">
@@ -458,7 +594,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
     </SafeAreaView>
   );

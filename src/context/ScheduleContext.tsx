@@ -30,10 +30,10 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    Storage.get<WeekdaySchedules>(Storage.KEYS.SCHEDULE).then((saved) => {
-      if (saved) setWeekdaySchedules(saved);
-      setLoaded(true);
-    });
+    Storage.get<WeekdaySchedules>(Storage.KEYS.SCHEDULE)
+      .then((saved) => { if (saved) setWeekdaySchedules(saved); })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
   }, []);
 
   const setSchedule = useCallback((schedules: WeekdaySchedules) => {
@@ -53,11 +53,7 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
     return templates.map((t, i) => ({
       ...t,
       id: `lec-${dayOfWeek}-${i}`,
-      status: isPast
-        ? ((i + dayOfWeek) % 7 === 0 ? "cancelled" : (i + dayOfWeek) % 5 === 0 ? "absent" : "present")
-        : isToday
-        ? (i < 2 ? "present" : null)
-        : null,
+      status: null,
     }));
   }, [weekdaySchedules]);
 

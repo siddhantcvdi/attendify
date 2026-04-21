@@ -15,6 +15,10 @@ nativeWindConfig.resolver = {
   ...resolver,
   assetExts: resolver.assetExts.filter((ext) => ext !== "svg"),
   sourceExts: [...resolver.sourceExts, "svg"],
+  extraNodeModules: {
+    // Stub Node.js `assert` pulled in by expo-notifications → @ide/backoff
+    assert: require.resolve("./src/stubs/assert.js"),
+  },
 };
 
 module.exports = nativeWindConfig;

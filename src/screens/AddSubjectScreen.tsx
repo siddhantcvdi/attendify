@@ -11,7 +11,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { X, Plus, Trash2 } from "lucide-react-native";
+import TimePicker from "../components/TimePicker";
 import { Subject } from "../data/types";
+import { useSchedule } from "../context/ScheduleContext";
+
+const DAY_TO_NUM: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5 };
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 
@@ -20,8 +24,6 @@ interface LectureSlot {
   days: string[];
   startTime: string;
   endTime: string;
-  room: string;
-  professor: string;
 }
 
 function emptySlot(): LectureSlot {
@@ -30,8 +32,6 @@ function emptySlot(): LectureSlot {
     days: [],
     startTime: "",
     endTime: "",
-    room: "",
-    professor: "",
   };
 }
 
@@ -48,12 +48,21 @@ export default function AddSubjectScreen({
 }: AddSubjectScreenProps) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
+  const [attended, setAttended] = useState("");
+  const [total, setTotal] = useState("");
+  const [room, setRoom] = useState("");
+  const [professor, setProfessor] = useState("");
   const [slots, setSlots] = useState<LectureSlot[]>([emptySlot()]);
   const [errors, setErrors] = useState<{ name?: string; code?: string }>({});
+  const { weekdaySchedules, setSchedule } = useSchedule();
 
   const reset = useCallback(() => {
     setName("");
     setCode("");
+    setAttended("");
+    setTotal("");
+    setRoom("");
+    setProfessor("");
     setSlots([emptySlot()]);
     setErrors({});
   }, []);
@@ -66,21 +75,49 @@ export default function AddSubjectScreen({
   const handleSave = useCallback(() => {
     const newErrors: typeof errors = {};
     if (!name.trim()) newErrors.name = "Subject name is required";
-    if (!code.trim()) newErrors.code = "Subject code is required";
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
+    const parsedTotal = parseInt(total, 10);
+    const parsedAttended = parseInt(attended, 10);
+    const subjectId = Date.now().toString();
     onSave({
-      id: Date.now().toString(),
+      id: subjectId,
       name: name.trim(),
       code: code.trim().toUpperCase(),
-      totalClasses: 0,
-      attendedClasses: 0,
+      totalClasses: isNaN(parsedTotal) ? 0 : parsedTotal,
+      attendedClasses: isNaN(parsedAttended) ? 0 : Math.min(parsedAttended, isNaN(parsedTotal) ? 0 : parsedTotal),
+      room: room.trim(),
+      professor: professor.trim(),
     });
+
+    // Merge slots into the weekly schedule
+    const updated = { ...weekdaySchedules };
+    for (const slot of slots) {
+      if (!slot.startTime || !slot.endTime) continue;
+      for (const day of slot.days) {
+        const dayNum = DAY_TO_NUM[day];
+        if (dayNum === undefined) continue;
+        updated[dayNum] = [
+          ...(updated[dayNum] ?? []),
+          {
+            subjectId,
+            subjectName: name.trim(),
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            room: room.trim(),
+            professor: professor.trim(),
+            topic: "",
+          },
+        ];
+      }
+    }
+    setSchedule(updated);
+
     reset();
     onClose();
-  }, [name, code, onSave, onClose, reset]);
+  }, [name, code, total, attended, room, professor, slots, weekdaySchedules, setSchedule, onSave, onClose, reset]);
 
   const updateSlot = useCallback(
     (id: string, patch: Partial<LectureSlot>) => {
@@ -191,6 +228,58 @@ export default function AddSubjectScreen({
                 </Text>
               )}
 
+              {/* Attendance (optional) */}
+              <Text className="text-text-muted text-xs mb-1 mt-3">
+                Attendance <Text className="text-text-muted text-xs font-normal">(optional)</Text>
+              </Text>
+              <View className="flex-row gap-3">
+                <View className="flex-1">
+                  <Text className="text-text-muted text-xs mb-1">Attended</Text>
+                  <TextInput
+                    value={attended}
+                    onChangeText={setAttended}
+                    placeholder="0"
+                    placeholderTextColor="#bcc1cd"
+                    keyboardType="number-pad"
+                    className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm"
+                    style={{ fontFamily: "Poppins_400Regular" }}
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-text-muted text-xs mb-1">Total</Text>
+                  <TextInput
+                    value={total}
+                    onChangeText={setTotal}
+                    placeholder="0"
+                    placeholderTextColor="#bcc1cd"
+                    keyboardType="number-pad"
+                    className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm"
+                    style={{ fontFamily: "Poppins_400Regular" }}
+                  />
+                </View>
+              </View>
+
+              {/* Room */}
+              <Text className="text-text-muted text-xs mb-1 mt-3">Room</Text>
+              <TextInput
+                value={room}
+                onChangeText={setRoom}
+                placeholder="e.g. LT-3"
+                placeholderTextColor="#bcc1cd"
+                className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm"
+                style={{ fontFamily: "Poppins_400Regular" }}
+              />
+
+              {/* Professor */}
+              <Text className="text-text-muted text-xs mb-1 mt-3">Professor</Text>
+              <TextInput
+                value={professor}
+                onChangeText={setProfessor}
+                placeholder="e.g. Dr. Smith"
+                placeholderTextColor="#bcc1cd"
+                className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm"
+                style={{ fontFamily: "Poppins_400Regular" }}
+              />
             </View>
 
             {/* Lecture Slots */}
@@ -242,56 +331,23 @@ export default function AddSubjectScreen({
                 {/* Times */}
                 <View className="flex-row gap-3 mb-3">
                   <View className="flex-1">
-                    <Text className="text-text text-xs font-medium mb-1">
-                      Start Time
-                    </Text>
-                    <TextInput
+                    <Text className="text-text text-xs font-medium mb-1">Start Time</Text>
+                    <TimePicker
                       value={slot.startTime}
-                      onChangeText={(t) => updateSlot(slot.id, { startTime: t })}
+                      onChange={(t) => updateSlot(slot.id, { startTime: t })}
                       placeholder="09:00"
-                      placeholderTextColor="#bcc1cd"
-                      keyboardType="numbers-and-punctuation"
-                      className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm"
-                      style={{ fontFamily: "Poppins_400Regular" }}
                     />
                   </View>
                   <View className="flex-1">
-                    <Text className="text-text text-xs font-medium mb-1">
-                      End Time
-                    </Text>
-                    <TextInput
+                    <Text className="text-text text-xs font-medium mb-1">End Time</Text>
+                    <TimePicker
                       value={slot.endTime}
-                      onChangeText={(t) => updateSlot(slot.id, { endTime: t })}
+                      onChange={(t) => updateSlot(slot.id, { endTime: t })}
                       placeholder="10:00"
-                      placeholderTextColor="#bcc1cd"
-                      keyboardType="numbers-and-punctuation"
-                      className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm"
-                      style={{ fontFamily: "Poppins_400Regular" }}
                     />
                   </View>
                 </View>
 
-                {/* Room */}
-                <Text className="text-text text-xs font-medium mb-1">Room</Text>
-                <TextInput
-                  value={slot.room}
-                  onChangeText={(t) => updateSlot(slot.id, { room: t })}
-                  placeholder="e.g. LT-3"
-                  placeholderTextColor="#bcc1cd"
-                  className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm mb-3"
-                  style={{ fontFamily: "Poppins_400Regular" }}
-                />
-
-                {/* Professor */}
-                <Text className="text-text text-xs font-medium mb-1">Professor</Text>
-                <TextInput
-                  value={slot.professor}
-                  onChangeText={(t) => updateSlot(slot.id, { professor: t })}
-                  placeholder="e.g. Dr. Smith"
-                  placeholderTextColor="#bcc1cd"
-                  className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm"
-                  style={{ fontFamily: "Poppins_400Regular" }}
-                />
               </View>
             ))}
 

@@ -1,3 +1,4 @@
+import "./src/services/attendanceTask"; // register background task + notification handler before app renders
 import React, { useEffect, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { NavigationContainer } from "@react-navigation/native";
@@ -10,8 +11,15 @@ import { ScheduleProvider } from "./src/context/ScheduleContext";
 import { AttendanceProvider } from "./src/context/AttendanceContext";
 import { AppResetProvider } from "./src/context/AppResetContext";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
+import { useAutoAttendance } from "./src/hooks/useAutoAttendance";
 
 const ONBOARDING_KEY = "onboarding_complete";
+
+/** Runs hooks that need context providers but aren't tied to a specific screen */
+function GlobalHooks() {
+  useAutoAttendance();
+  return null;
+}
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -22,7 +30,7 @@ export default function App() {
     AsyncStorage.getItem(ONBOARDING_KEY).then((value) => {
       setShowOnboarding(value !== "true");
       setReady(true);
-    });
+    }).catch(() => setReady(true));
   }, []);
 
   async function handleOnboardingComplete() {
@@ -52,6 +60,7 @@ export default function App() {
     <ScheduleProvider key={instanceKey}>
     <AttendanceProvider key={instanceKey}>
     <AppResetProvider onReset={handleReset}>
+      <GlobalHooks />
       <NavigationContainer>
         <StatusBar style="dark" />
 

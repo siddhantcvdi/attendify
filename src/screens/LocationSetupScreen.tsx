@@ -1,32 +1,27 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   Modal,
-
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import MapView, { Marker, Circle, MapPressEvent, Region } from "react-native-maps";
+import { WebView } from "react-native-webview";
 import Slider from "@react-native-community/slider";
 import * as Location from "expo-location";
 import { X, Locate } from "lucide-react-native";
-import { ClassLocation } from "../data/types";
+import { NamedLocation } from "../data/types";
+import { buildLeafletHTML } from "../utils/leafletMap";
 
 interface LocationSetupScreenProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (location: ClassLocation) => void;
-  initialLocation?: ClassLocation | null;
+  onSave: (location: NamedLocation) => void;
+  initialLocation?: NamedLocation | null;
 }
 
-const DEFAULT_REGION: Region = {
-  latitude: 20.5937,
-  longitude: 78.9629,
-  latitudeDelta: 5,
-  longitudeDelta: 5,
-};
 
 export default function LocationSetupScreen({
   visible,
@@ -34,44 +29,73 @@ export default function LocationSetupScreen({
   onSave,
   initialLocation,
 }: LocationSetupScreenProps) {
-  const mapRef = useRef<MapView>(null);
+  const webRef = useRef<WebView>(null);
+  const webLoaded = useRef(false);
+  const pendingFlyTo = useRef<{ lat: number; lng: number } | null>(null);
+  const [locationName, setLocationName] = useState(initialLocation?.name ?? "");
   const [pin, setPin] = useState<{ latitude: number; longitude: number } | null>(
     initialLocation ? { latitude: initialLocation.latitude, longitude: initialLocation.longitude } : null
   );
   const [radius, setRadius] = useState(initialLocation?.radius ?? 50);
   const [locating, setLocating] = useState(false);
 
+  const centerLat = initialLocation?.latitude ?? 20.5937;
+  const centerLng = initialLocation?.longitude ?? 78.9629;
+
+  // Build HTML only once per open — never rebuild (avoids WebView reload)
+  const html = useMemo(() => buildLeafletHTML(
+    centerLat, centerLng,
+    initialLocation?.latitude ?? null,
+    initialLocation?.longitude ?? null,
+    initialLocation?.radius ?? 50,
+  ), [visible]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      webLoaded.current = false;
+      pendingFlyTo.current = null;
+      return;
+    }
     if (initialLocation) {
+      setLocationName(initialLocation.name);
       setPin({ latitude: initialLocation.latitude, longitude: initialLocation.longitude });
       setRadius(initialLocation.radius);
-      mapRef.current?.animateToRegion({
-        latitude: initialLocation.latitude,
-        longitude: initialLocation.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      }, 600);
     } else {
+      setLocationName("");
       setPin(null);
       setRadius(50);
       handleUseMyLocation();
     }
   }, [visible]);
 
-  function handleMapPress(e: MapPressEvent) {
-    setPin(e.nativeEvent.coordinate);
+  function handleWebLoad() {
+    webLoaded.current = true;
+    if (pendingFlyTo.current) {
+      const { lat, lng } = pendingFlyTo.current;
+      webRef.current?.injectJavaScript(`flyTo(${lat}, ${lng}); true;`);
+      pendingFlyTo.current = null;
+    }
   }
+
+  // Push radius updates into the WebView via JS, not by rebuilding HTML
+  useEffect(() => {
+    webRef.current?.injectJavaScript(`updateRadius(${radius}); true;`);
+  }, [radius]);
 
   async function handleUseMyLocation() {
     setLocating(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") return;
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const coord = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
-      setPin(coord);
-      mapRef.current?.animateToRegion({ ...coord, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 600);
+      const last = await Location.getLastKnownPositionAsync();
+      const loc = last ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude, longitude } = loc.coords;
+      setPin({ latitude, longitude });
+      if (webLoaded.current) {
+        webRef.current?.injectJavaScript(`flyTo(${latitude}, ${longitude}); true;`);
+      } else {
+        pendingFlyTo.current = { lat: latitude, lng: longitude };
+      }
     } finally {
       setLocating(false);
     }
@@ -79,26 +103,23 @@ export default function LocationSetupScreen({
 
   function handleSave() {
     if (!pin) return;
-    onSave({ latitude: pin.latitude, longitude: pin.longitude, radius });
+    const id = initialLocation?.id ?? `loc-${Date.now()}`;
+    const name = locationName.trim() || "My Location";
+    onSave({ id, name, latitude: pin.latitude, longitude: pin.longitude, radius });
     onClose();
   }
 
-  const initialRegion = initialLocation
-    ? {
-        latitude: initialLocation.latitude,
-        longitude: initialLocation.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
+  function handleWebMessage(event: any) {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === "pin") {
+        setPin({ latitude: data.lat, longitude: data.lng });
       }
-    : DEFAULT_REGION;
+    } catch {}
+  }
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
         {/* Header */}
         <View className="flex-row items-center justify-between px-5 py-4 border-b border-neutral-100">
@@ -114,31 +135,16 @@ export default function LocationSetupScreen({
 
         {/* Map */}
         <View className="flex-1">
-          <MapView
-            ref={mapRef}
+          <WebView
+            ref={webRef}
             style={{ flex: 1 }}
-            initialRegion={initialRegion}
-            onPress={handleMapPress}
-            showsUserLocation
-          >
-            {pin && (
-              <>
-                <Marker
-                  coordinate={pin}
-                  draggable
-                  onDragEnd={(e) => setPin(e.nativeEvent.coordinate)}
-                  pinColor="#4dc591"
-                />
-                <Circle
-                  center={pin}
-                  radius={radius}
-                  fillColor="rgba(77,197,145,0.18)"
-                  strokeColor="#4dc591"
-                  strokeWidth={1.5}
-                />
-              </>
-            )}
-          </MapView>
+            source={{ html }}
+            onMessage={handleWebMessage}
+            onLoad={handleWebLoad}
+            javaScriptEnabled
+            originWhitelist={["*"]}
+            scrollEnabled={false}
+          />
 
           {/* Use my location button */}
           <TouchableOpacity
@@ -178,6 +184,14 @@ export default function LocationSetupScreen({
 
         {/* Bottom sheet */}
         <View className="bg-white rounded-t-3xl px-5 pt-5 pb-4">
+          <Text className="text-text text-xs font-medium mb-1">Location Name</Text>
+          <TextInput
+            value={locationName}
+            onChangeText={setLocationName}
+            placeholder="e.g. Main Campus"
+            placeholderTextColor="#bcc1cd"
+            className="bg-surface border border-neutral-200 rounded-2xl px-4 py-2.5 text-text text-sm mb-4"
+          />
           <View className="flex-row items-center justify-between mb-2">
             <Text className="text-text text-sm font-medium">Radius</Text>
             <Text className="text-text text-base font-bold">
@@ -198,7 +212,6 @@ export default function LocationSetupScreen({
             thumbTintColor="#4dc591"
           />
 
-          {/* Save button */}
           <TouchableOpacity
             onPress={handleSave}
             activeOpacity={pin ? 0.8 : 1}
@@ -212,9 +225,7 @@ export default function LocationSetupScreen({
               elevation: pin ? 8 : 0,
             }}
           >
-            <Text className="text-white text-base font-bold">
-              Save Location
-            </Text>
+            <Text className="text-white text-base font-bold">Save Location</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>

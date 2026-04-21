@@ -7,6 +7,17 @@ module.exports = {
   presets: [require("nativewind/preset")],
   theme: {
     extend: {
+      fontSize:{
+        xs: "13px",
+        sm: "14px",
+        base: "15px",
+        lg: "18px",
+        xl: "22px",
+        "2xl": "29px",
+        "3xl": "35px",
+        "4xl": "47px",
+        "5xl": "59px",
+      },
       colors: {
         primary: {
           50: "var(--color-primary-50)",

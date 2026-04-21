@@ -18,24 +18,27 @@ import {
   getDashboardLectures,
   getAttendancePercentage,
 } from "../utils/attendance";
+import { useAttendanceActions } from "../hooks/useAttendanceActions";
+import { useMinuteTick } from "../hooks/useMinuteTick";
 import { AttendanceStatus, Lecture, Subject } from "../data/types";
 
 function getGreeting(): { text: string; emoji: string } {
   const hour = new Date().getHours();
-  if (hour < 12) return { text: "Good morning,", emoji: "🍵" };
-  if (hour < 17) return { text: "Good afternoon,", emoji: "☀️" };
-  if (hour < 21) return { text: "Good evening,", emoji: "🍁" };
+  if (hour >= 4 && hour < 12) return { text: "Good morning,", emoji: "🍵" };
+  if (hour >= 12 && hour < 17) return { text: "Good afternoon,", emoji: "☀️" };
+  if (hour >= 17 && hour < 21) return { text: "Good evening,", emoji: "🍁" };
   return { text: "Day wrapped up,", emoji: "🌙" };
 }
 
 function dateKey(d: Date): string {
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
 export default function DashboardScreen() {
   const { profile } = useProfile();
   const { subjects, addSubject, updateSubject, deleteSubject } = useSubjects();
-  const { statusOverrides, extraClasses, setStatus } = useAttendance();
+  const { statusOverrides, extraClasses } = useAttendance();
+  const { markAttendance } = useAttendanceActions();
   const { getLecturesForDate } = useSchedule();
   const { text: greetingText, emoji } = getGreeting();
   const [showAddSubject, setShowAddSubject] = useState(false);
@@ -55,11 +58,13 @@ export default function DashboardScreen() {
 
   const todayPercentage = useMemo(() => getTodayAttendancePercentage(lectures), [lectures]);
   const { attended, total } = useMemo(() => getTodayProgress(lectures), [lectures]);
-  const dashboardLectures = useMemo(() => getDashboardLectures(lectures), [lectures]);
+  const tick = useMinuteTick();
+  const dashboardLectures = useMemo(() => getDashboardLectures(lectures), [lectures, tick]);
 
   const handleStatusChange = useCallback((lectureId: string, status: AttendanceStatus) => {
-    setStatus(dk, lectureId, status);
-  }, [dk, setStatus]);
+    const lecture = lectures.find((l) => l.id === lectureId);
+    if (lecture) markAttendance(dk, lecture, status);
+  }, [dk, lectures, markAttendance]);
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>

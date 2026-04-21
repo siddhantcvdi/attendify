@@ -9,6 +9,7 @@ interface SubjectsContextValue {
   updateSubject: (subject: Subject) => void;
   deleteSubject: (id: string) => void;
   clearSubjects: () => void;
+  reload: () => Promise<void>;
 }
 
 const SubjectsContext = createContext<SubjectsContextValue>({
@@ -18,6 +19,7 @@ const SubjectsContext = createContext<SubjectsContextValue>({
   updateSubject: () => {},
   deleteSubject: () => {},
   clearSubjects: () => {},
+  reload: async () => {},
 });
 
 export function SubjectsProvider({ children }: { children: React.ReactNode }) {
@@ -25,10 +27,10 @@ export function SubjectsProvider({ children }: { children: React.ReactNode }) {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    Storage.get<Subject[]>(Storage.KEYS.SUBJECTS).then((saved) => {
-      if (saved) setSubjects(saved);
-      setLoaded(true);
-    });
+    Storage.get<Subject[]>(Storage.KEYS.SUBJECTS)
+      .then((saved) => { if (saved) setSubjects(saved); })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
   }, []);
 
   function persist(next: Subject[]) {
@@ -41,9 +43,7 @@ export function SubjectsProvider({ children }: { children: React.ReactNode }) {
   }
 
   function importSubjects(incoming: Subject[]) {
-    const existingIds = new Set(subjects.map((s) => s.id));
-    const merged = [...subjects, ...incoming.filter((s) => !existingIds.has(s.id))];
-    persist(merged);
+    persist(incoming);
   }
 
   function updateSubject(updated: Subject) {
@@ -58,10 +58,15 @@ export function SubjectsProvider({ children }: { children: React.ReactNode }) {
     persist([]);
   }
 
+  async function reload() {
+    const saved = await Storage.get<Subject[]>(Storage.KEYS.SUBJECTS);
+    if (saved) setSubjects(saved);
+  }
+
   if (!loaded) return null;
 
   return (
-    <SubjectsContext.Provider value={{ subjects, addSubject, importSubjects, updateSubject, deleteSubject, clearSubjects }}>
+    <SubjectsContext.Provider value={{ subjects, addSubject, importSubjects, updateSubject, deleteSubject, clearSubjects, reload }}>
       {children}
     </SubjectsContext.Provider>
   );

@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity } from "react-native";
 import { BookOpen, Pencil } from "lucide-react-native";
 import CircularProgress from "./CircularProgress";
 import { getAttendanceColor } from "../utils/attendance";
+import { useProfile } from "../context/ProfileContext";
 
 interface SubjectCardProps {
   name: string;
@@ -23,7 +24,8 @@ export default function SubjectCard({
   onEdit,
   className,
 }: SubjectCardProps) {
-  const color = getAttendanceColor(percentage);
+  const { profile } = useProfile();
+  const color = getAttendanceColor(percentage, profile.minAttendance);
 
   return (
     <View

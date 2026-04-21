@@ -6,6 +6,8 @@ import LectureTimelineCard from "../components/LectureTimelineCard";
 import { getOngoingOrNextLecture } from "../utils/attendance";
 import { useAttendance } from "../context/AttendanceContext";
 import { useSchedule } from "../context/ScheduleContext";
+import { useAttendanceActions } from "../hooks/useAttendanceActions";
+import { useMinuteTick } from "../hooks/useMinuteTick";
 import { AttendanceStatus, Lecture } from "../data/types";
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -16,14 +18,16 @@ function isSameDay(a: Date, b: Date): boolean {
 }
 
 function dateKey(d: Date): string {
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
 export default function TodayScreen() {
-  const { statusOverrides, extraClasses, setStatus } = useAttendance();
+  const { statusOverrides, extraClasses } = useAttendance();
+  const { markAttendance } = useAttendanceActions();
   const { getLecturesForDate } = useSchedule();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [weekOffset, setWeekOffset] = useState(0);
+  const tick = useMinuteTick();
 
   const today = new Date();
   const isToday = isSameDay(selectedDate, today);
@@ -45,7 +49,11 @@ export default function TodayScreen() {
     getLecturesForDate,
   ]);
 
-  const currentLecture = isToday ? getOngoingOrNextLecture(lectures) : null;
+  // Re-evaluate ongoing/upcoming every minute
+  const currentLecture = useMemo(
+    () => (isToday ? getOngoingOrNextLecture(lectures) : null),
+    [lectures, isToday, tick]
+  );
   const activeLectureId = currentLecture?.lecture.id ?? null;
 
   const day = selectedDate.getDate();
@@ -55,14 +63,16 @@ export default function TodayScreen() {
   const handleSelectDate = useCallback((date: Date) => setSelectedDate(date), []);
 
   const handleWeekChange = useCallback((offset: number) => {
-    setWeekOffset(offset);
-    const diff = offset - weekOffset;
-    setSelectedDate((prev) => {
-      const next = new Date(prev);
-      next.setDate(prev.getDate() + diff * 7);
-      return next;
+    setWeekOffset((prevOffset) => {
+      const diff = offset - prevOffset;
+      setSelectedDate((prev) => {
+        const next = new Date(prev);
+        next.setDate(prev.getDate() + diff * 7);
+        return next;
+      });
+      return offset;
     });
-  }, [weekOffset]);
+  }, []);
 
   const handleGoToToday = useCallback(() => {
     setSelectedDate(new Date());
@@ -70,8 +80,9 @@ export default function TodayScreen() {
   }, []);
 
   const handleStatusChange = useCallback((lectureId: string, status: AttendanceStatus) => {
-    setStatus(dk, lectureId, status);
-  }, [dk, setStatus]);
+    const lecture = lectures.find((l) => l.id === lectureId);
+    if (lecture) markAttendance(dk, lecture, status);
+  }, [dk, lectures, markAttendance]);
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>

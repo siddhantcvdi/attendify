@@ -81,7 +81,6 @@ export default function AttendanceActions({
               className={`text-xs font-medium ml-1 ${
                 isSelected ? selected.text : defaultText
               }`}
-              style={{ fontSize: 11 }}
             >
               {label}
             </Text>

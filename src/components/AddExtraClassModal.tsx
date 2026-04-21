@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { X } from "lucide-react-native";
-import { subjects } from "../data/mockData";
+import { useSubjects } from "../context/SubjectsContext";
 import { Lecture } from "../data/types";
 
 interface AddExtraClassModalProps {
@@ -25,6 +25,7 @@ export default function AddExtraClassModal({
   onClose,
   onAdd,
 }: AddExtraClassModalProps) {
+  const { subjects } = useSubjects();
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");

@@ -6,10 +6,16 @@ export interface ClassLocation {
   radius: number; // metres
 }
 
+export interface NamedLocation extends ClassLocation {
+  id: string;
+  name: string;
+}
+
 export interface UserProfile {
   name: string;
   minAttendance: number; // percent, e.g. 75
-  classLocation: ClassLocation | null;
+  locations: NamedLocation[]; // first entry is the default location
+  autoAttendance: boolean; // whether background auto-attendance is enabled
 }
 
 export interface Subject {
@@ -18,6 +24,9 @@ export interface Subject {
   code: string;
   totalClasses: number;
   attendedClasses: number;
+  room?: string;
+  professor?: string;
+  locationId?: string; // if unset, uses the default (first) location
 }
 
 export interface Lecture {

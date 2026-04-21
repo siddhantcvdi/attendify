@@ -10,7 +10,7 @@ import { useAttendance } from "../context/AttendanceContext";
 import { Lecture } from "../data/types";
 
 function dateKey(d: Date): string {
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
 const Tab = createBottomTabNavigator();

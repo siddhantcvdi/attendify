@@ -95,7 +95,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
               <TextInput
                 value={name}
                 onChangeText={setName}
-                placeholder="e.g. Siddhant"
+                placeholder="e.g. Alex Johnson"
                 placeholderTextColor="#bcc1cd"
                 returnKeyType="done"
                 className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm"

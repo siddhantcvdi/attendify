@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "lectur",
-    "slug": "lectur",
+    "name": "attendify",
+    "slug": "attendify",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,6 +12,25 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Attendify to use your location to set up class geofence.",
+          "locationAlwaysAndWhenInUsePermission": "Allow Attendify to check your location in the background to auto-mark attendance.",
+          "locationAlwaysPermission": "Allow Attendify to check your location in the background to auto-mark attendance.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      "@react-native-community/datetimepicker",
+      [
+        "expo-notifications",
+        {
+          "sounds": []
+        }
+      ]
+    ],
     "ios": {
       "supportsTablet": true
     },
@@ -21,10 +40,16 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.siddhantcvdi.attendify"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "e0229c30-2332-4439-b1f2-aeaf31ce83bb"
+      }
     }
   }
 }

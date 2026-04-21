@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -10,15 +10,17 @@ import {
   Platform,
   ActivityIndicator,
   Animated,
+  Alert,
 } from "react-native";
 import GlobeIllustration from "../../assets/image.svg";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Minus, Plus, Locate, MapPin } from "lucide-react-native";
-import MapView, { Marker, Circle, MapPressEvent } from "react-native-maps";
+import { WebView } from "react-native-webview";
 import Slider from "@react-native-community/slider";
 import * as Location from "expo-location";
 import { useProfile } from "../context/ProfileContext";
-import { ClassLocation } from "../data/types";
+import { buildLeafletHTML } from "../utils/leafletMap";
+import { requestAutoAttendancePermissions } from "../utils/autoAttendancePermissions";
 
 const { width } = Dimensions.get("window");
 
@@ -29,7 +31,7 @@ interface OnboardingScreenProps {
 export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   const { updateProfile } = useProfile();
   const scrollRef = useRef<ScrollView>(null);
-  const mapRef = useRef<MapView>(null);
+  const webRef = useRef<WebView>(null);
 
   const [step, setStep] = useState(0);
 
@@ -76,6 +78,11 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   const [pin, setPin] = useState<{ latitude: number; longitude: number } | null>(null);
   const [radius, setRadius] = useState(50);
   const [locating, setLocating] = useState(false);
+  const [autoAttendance, setAutoAttendance] = useState(false);
+  const [togglingAuto, setTogglingAuto] = useState(false);
+
+  // Build HTML once — never rebuild to avoid WebView reload on pin/radius change
+  const mapHtml = useMemo(() => buildLeafletHTML(20.5937, 78.9629, null, null, 50), []);
 
   function goToSetup() {
     setStep(1);
@@ -86,30 +93,51 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
     setLocating(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return;
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "Please enable location access in Settings to use this feature.");
+        return;
+      }
+      const last = await Location.getLastKnownPositionAsync();
+      const loc = last ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const coord = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
       setPin(coord);
-      mapRef.current?.animateToRegion({ ...coord, latitudeDelta: 0.005, longitudeDelta: 0.005 }, 600);
+      webRef.current?.injectJavaScript(`flyTo(${coord.latitude}, ${coord.longitude}); true;`);
     } finally {
       setLocating(false);
     }
   }
 
-  function handleMapPress(e: MapPressEvent) {
-    setPin(e.nativeEvent.coordinate);
+  function handleWebMessage(event: any) {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === "pin") setPin({ latitude: data.lat, longitude: data.lng });
+    } catch {}
+  }
+
+  async function handleToggleAutoAttendance() {
+    if (autoAttendance) {
+      setAutoAttendance(false);
+      return;
+    }
+    setTogglingAuto(true);
+    const granted = await requestAutoAttendancePermissions();
+    setTogglingAuto(false);
+    if (granted) setAutoAttendance(true);
   }
 
   function handleFinish() {
     const finalName = name.trim() || "Student";
-    const classLocation: ClassLocation | null = pin
-      ? { latitude: pin.latitude, longitude: pin.longitude, radius }
-      : null;
-    updateProfile({ name: finalName, minAttendance, classLocation });
+    const locations = pin
+      ? [{ id: `loc-${Date.now()}`, name: "Main Campus", latitude: pin.latitude, longitude: pin.longitude, radius }]
+      : [];
+    updateProfile({ name: finalName, minAttendance, locations, autoAttendance });
     onComplete();
   }
 
-  const canFinish = name.trim().length > 0;
+  const [outerScrollEnabled, setOuterScrollEnabled] = useState(true);
+
+  const needsLocation = autoAttendance && !pin;
+  const canFinish = name.trim().length > 0 && !needsLocation;
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top", "bottom"]}>
@@ -184,6 +212,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
             keyboardShouldPersistTaps="handled"
+            scrollEnabled={outerScrollEnabled}
           >
             <Text className="text-text text-2xl font-bold mb-1">Let's set you up</Text>
             <Text className="text-text-muted text-sm mb-6">Fill in a few details to get started.</Text>
@@ -194,7 +223,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
               <TextInput
                 value={name}
                 onChangeText={setName}
-                placeholder="e.g. Siddhant"
+                placeholder="e.g. Alex Johnson"
                 placeholderTextColor="#bcc1cd"
                 returnKeyType="done"
                 className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm"
@@ -238,31 +267,21 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
                 <Text className="text-text-muted text-xs mb-3">Tap the map to drop a pin where your classes are held</Text>
               </View>
 
-              <View style={{ height: 200 }}>
-                <MapView
-                  ref={mapRef}
+              <View
+                style={{ height: 200 }}
+                onTouchStart={() => setOuterScrollEnabled(false)}
+                onTouchEnd={() => setOuterScrollEnabled(true)}
+                onTouchCancel={() => setOuterScrollEnabled(true)}
+              >
+                <WebView
+                  ref={webRef}
                   style={{ flex: 1 }}
-                  initialRegion={{ latitude: 20.5937, longitude: 78.9629, latitudeDelta: 5, longitudeDelta: 5 }}
-                  onPress={handleMapPress}
-                >
-                  {pin && (
-                    <>
-                      <Marker
-                        coordinate={pin}
-                        draggable
-                        onDragEnd={(e) => setPin(e.nativeEvent.coordinate)}
-                        pinColor="#4dc591"
-                      />
-                      <Circle
-                        center={pin}
-                        radius={radius}
-                        fillColor="rgba(77,197,145,0.18)"
-                        strokeColor="#4dc591"
-                        strokeWidth={1.5}
-                      />
-                    </>
-                  )}
-                </MapView>
+                  source={{ html: mapHtml }}
+                  onMessage={handleWebMessage}
+                  javaScriptEnabled
+                  originWhitelist={["*"]}
+                  scrollEnabled={false}
+                />
 
                 <TouchableOpacity
                   onPress={handleUseMyLocation}
@@ -291,7 +310,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
                     maximumValue={100}
                     step={5}
                     value={radius}
-                    onValueChange={setRadius}
+                    onValueChange={(r) => { setRadius(r); webRef.current?.injectJavaScript(`updateRadius(${r}); true;`); }}
                     minimumTrackTintColor="#4dc591"
                     maximumTrackTintColor="#e5e7eb"
                     thumbTintColor="#4dc591"
@@ -304,6 +323,55 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
                   <MapPin size={13} color="#bcc1cd" />
                   <Text className="text-text-muted text-xs ml-1.5">No pin dropped — you can set this later in Settings</Text>
                 </View>
+              )}
+            </View>
+
+            {/* Auto Attendance toggle */}
+            <View className={`bg-white rounded-3xl border p-4 mb-4 ${needsLocation ? "border-amber-400" : "border-neutral-200"}`}>
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1 mr-4">
+                  <Text className="text-text text-xs font-medium mb-0.5">Auto Attendance</Text>
+                  <Text className="text-text-muted text-xs">
+                    Automatically mark attendance based on your location at class time
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={handleToggleAutoAttendance}
+                  disabled={togglingAuto}
+                  activeOpacity={0.7}
+                  style={{
+                    width: 48,
+                    height: 28,
+                    borderRadius: 14,
+                    backgroundColor: autoAttendance ? "#4dc591" : "#e2e8f0",
+                    justifyContent: "center",
+                    paddingHorizontal: 2,
+                  }}
+                >
+                  {togglingAuto ? (
+                    <ActivityIndicator size="small" color={autoAttendance ? "#fff" : "#94a9a6"} />
+                  ) : (
+                    <View
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        backgroundColor: "#fff",
+                        alignSelf: autoAttendance ? "flex-end" : "flex-start",
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.15,
+                        shadowRadius: 2,
+                        elevation: 2,
+                      }}
+                    />
+                  )}
+                </TouchableOpacity>
+              </View>
+              {needsLocation && (
+                <Text className="text-amber-600 text-xs mt-2">
+                  Drop a pin on the map above to use auto attendance
+                </Text>
               )}
             </View>
           </ScrollView>
@@ -324,6 +392,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
         ) : (
           <TouchableOpacity
             onPress={handleFinish}
+            disabled={!canFinish}
             activeOpacity={canFinish ? 0.8 : 1}
             className="rounded-3xl py-4 items-center"
             style={{ backgroundColor: canFinish ? "#4dc591" : "#d1d5db", shadowColor: canFinish ? "#4dc591" : "transparent", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: canFinish ? 8 : 0 }}

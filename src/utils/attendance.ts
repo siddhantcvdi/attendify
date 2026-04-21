@@ -13,9 +13,10 @@ export function getTodayAttendancePercentage(lectures: Lecture[]): number {
   return Math.round((attended / relevant.length) * 100);
 }
 
-export function getAttendanceColor(percentage: number): string {
-  if (percentage < 75) return "#ff7648";
-  return "#4dc591";
+export function getAttendanceColor(percentage: number, target: number = 75): string {
+  if (percentage >= target + 5) return "#4dc591";   // green — comfortably above
+  if (percentage >= target - 5) return "#f59e0b";   // yellow — borderline
+  return "#ef4444";                                  // red — below target
 }
 
 function parseTime(timeStr: string): number {
@@ -94,5 +95,5 @@ export function getTodayProgress(lectures: Lecture[]): {
 } {
   const cancelled = lectures.filter((l) => l.status === "cancelled").length;
   const attended = lectures.filter((l) => l.status === "present").length;
-  return { attended, total: lectures.length, cancelled };
+  return { attended, total: lectures.length - cancelled, cancelled };
 }

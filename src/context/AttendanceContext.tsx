@@ -11,6 +11,7 @@ interface AttendanceContextValue {
   setStatus: (dateKey: string, lectureId: string, status: AttendanceStatus) => void;
   addExtraClass: (dateKey: string, lecture: Lecture) => void;
   clearAttendance: () => void;
+  reload: () => Promise<void>;
 }
 
 const AttendanceContext = createContext<AttendanceContextValue>({
@@ -19,6 +20,7 @@ const AttendanceContext = createContext<AttendanceContextValue>({
   setStatus: () => {},
   addExtraClass: () => {},
   clearAttendance: () => {},
+  reload: async () => {},
 });
 
 export function AttendanceProvider({ children }: { children: React.ReactNode }) {
@@ -30,16 +32,23 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
     Promise.all([
       Storage.get<StatusOverrides>(Storage.KEYS.ATTENDANCE),
       Storage.get<ExtraClasses>(Storage.KEYS.EXTRA_CLASSES),
-    ]).then(([savedStatus, savedExtra]) => {
-      if (savedStatus) setStatusOverrides(savedStatus);
-      if (savedExtra) setExtraClasses(savedExtra);
-      setLoaded(true);
-    });
+    ])
+      .then(([savedStatus, savedExtra]) => {
+        if (savedStatus) setStatusOverrides(savedStatus);
+        if (savedExtra) setExtraClasses(savedExtra);
+      })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
   }, []);
 
   const setStatus = useCallback((dateKey: string, lectureId: string, status: AttendanceStatus) => {
     setStatusOverrides((prev) => {
-      const next = { ...prev, [`${dateKey}:${lectureId}`]: status };
+      const next = { ...prev };
+      if (status === null) {
+        delete next[`${dateKey}:${lectureId}`];
+      } else {
+        next[`${dateKey}:${lectureId}`] = status;
+      }
       Storage.set(Storage.KEYS.ATTENDANCE, next);
       return next;
     });
@@ -60,10 +69,19 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
     Storage.set(Storage.KEYS.EXTRA_CLASSES, {});
   }, []);
 
+  const reload = useCallback(async () => {
+    const [savedStatus, savedExtra] = await Promise.all([
+      Storage.get<StatusOverrides>(Storage.KEYS.ATTENDANCE),
+      Storage.get<ExtraClasses>(Storage.KEYS.EXTRA_CLASSES),
+    ]);
+    setStatusOverrides(savedStatus ?? {});
+    setExtraClasses(savedExtra ?? {});
+  }, []);
+
   if (!loaded) return null;
 
   return (
-    <AttendanceContext.Provider value={{ statusOverrides, extraClasses, setStatus, addExtraClass, clearAttendance }}>
+    <AttendanceContext.Provider value={{ statusOverrides, extraClasses, setStatus, addExtraClass, clearAttendance, reload }}>
       {children}
     </AttendanceContext.Provider>
   );

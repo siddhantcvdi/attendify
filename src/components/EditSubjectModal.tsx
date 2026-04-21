@@ -11,7 +11,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { X, Plus, Trash2 } from "lucide-react-native";
-import { Subject } from "../data/types";
+import TimePicker from "./TimePicker";
+import { Subject, NamedLocation } from "../data/types";
+import { useProfile } from "../context/ProfileContext";
+import { useSchedule } from "../context/ScheduleContext";
+
+const DAY_TO_NUM: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5 };
+const NUM_TO_DAY: Record<number, string> = { 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri" };
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 
@@ -20,8 +26,6 @@ interface LectureSlot {
   days: string[];
   startTime: string;
   endTime: string;
-  room: string;
-  professor: string;
 }
 
 function emptySlot(): LectureSlot {
@@ -30,8 +34,6 @@ function emptySlot(): LectureSlot {
     days: [],
     startTime: "",
     endTime: "",
-    room: "",
-    professor: "",
   };
 }
 
@@ -50,8 +52,16 @@ export default function EditSubjectModal({
   onSave,
   onDelete,
 }: EditSubjectModalProps) {
+  const { profile } = useProfile();
+  const { weekdaySchedules, setSchedule } = useSchedule();
+  const locations: NamedLocation[] = profile.locations ?? [];
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
+  const [attended, setAttended] = useState("");
+  const [total, setTotal] = useState("");
+  const [room, setRoom] = useState("");
+  const [professor, setProfessor] = useState("");
+  const [locationId, setLocationId] = useState<string | undefined>(undefined);
   const [slots, setSlots] = useState<LectureSlot[]>([emptySlot()]);
   const [errors, setErrors] = useState<{ name?: string; code?: string }>({});
 
@@ -59,14 +69,46 @@ export default function EditSubjectModal({
     if (subject) {
       setName(subject.name);
       setCode(subject.code);
-      setSlots([emptySlot()]);
+      setAttended(subject.attendedClasses > 0 ? String(subject.attendedClasses) : "");
+      setTotal(subject.totalClasses > 0 ? String(subject.totalClasses) : "");
+      setRoom(subject.room ?? "");
+      setProfessor(subject.professor ?? "");
+      setLocationId(subject.locationId);
       setErrors({});
+
+      // Load existing schedule slots for this subject
+      const slotMap: Record<string, LectureSlot> = {};
+      for (const [dayStr, templates] of Object.entries(weekdaySchedules)) {
+        const dayNum = parseInt(dayStr);
+        const dayName = NUM_TO_DAY[dayNum];
+        if (!dayName) continue;
+        for (const t of templates) {
+          if (t.subjectId !== subject.id) continue;
+          const key = `${t.startTime}|${t.endTime}`;
+          if (!slotMap[key]) {
+            slotMap[key] = {
+              id: Math.random().toString(36).slice(2),
+              days: [],
+              startTime: t.startTime,
+              endTime: t.endTime,
+            };
+          }
+          slotMap[key].days.push(dayName);
+        }
+      }
+      const loaded = Object.values(slotMap);
+      setSlots(loaded.length > 0 ? loaded : [emptySlot()]);
     }
-  }, [subject]);
+  }, [subject, weekdaySchedules]);
 
   const reset = useCallback(() => {
     setName("");
     setCode("");
+    setAttended("");
+    setTotal("");
+    setRoom("");
+    setProfessor("");
+    setLocationId(undefined);
     setSlots([emptySlot()]);
     setErrors({});
   }, []);
@@ -80,20 +122,64 @@ export default function EditSubjectModal({
     if (!subject) return;
     const newErrors: typeof errors = {};
     if (!name.trim()) newErrors.name = "Subject name is required";
-    if (!code.trim()) newErrors.code = "Subject code is required";
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
 
-    onSave({ ...subject, name: name.trim(), code: code.trim().toUpperCase() });
+    const parsedTotal = parseInt(total, 10);
+    const parsedAttended = parseInt(attended, 10);
+    onSave({
+      ...subject,
+      name: name.trim(),
+      code: code.trim().toUpperCase(),
+      room: room.trim(),
+      professor: professor.trim(),
+      locationId,
+      totalClasses: isNaN(parsedTotal) ? subject.totalClasses : parsedTotal,
+      attendedClasses: isNaN(parsedAttended) ? subject.attendedClasses : Math.min(parsedAttended, isNaN(parsedTotal) ? subject.totalClasses : parsedTotal),
+    });
+
+    // Remove old schedule entries for this subject, then add updated ones
+    const updated: typeof weekdaySchedules = {};
+    for (const [dayStr, templates] of Object.entries(weekdaySchedules)) {
+      const dayNum = parseInt(dayStr);
+      updated[dayNum] = templates.filter((t) => t.subjectId !== subject.id);
+    }
+    for (const slot of slots) {
+      if (!slot.startTime || !slot.endTime) continue;
+      for (const day of slot.days) {
+        const dayNum = DAY_TO_NUM[day];
+        if (dayNum === undefined) continue;
+        updated[dayNum] = [
+          ...(updated[dayNum] ?? []),
+          {
+            subjectId: subject.id,
+            subjectName: name.trim(),
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            room: room.trim(),
+            professor: professor.trim(),
+            topic: "",
+          },
+        ];
+      }
+    }
+    setSchedule(updated);
+
     reset();
     onClose();
-  }, [subject, name, code, onSave, onClose, reset]);
+  }, [subject, name, code, total, attended, room, professor, locationId, slots, weekdaySchedules, setSchedule, onSave, onClose, reset]);
 
   const handleDelete = useCallback(() => {
     if (!subject) return;
     onDelete(subject.id);
+    // Remove all schedule entries for this subject
+    const updated: typeof weekdaySchedules = {};
+    for (const [dayStr, templates] of Object.entries(weekdaySchedules)) {
+      updated[parseInt(dayStr)] = templates.filter((t) => t.subjectId !== subject.id);
+    }
+    setSchedule(updated);
     reset();
     onClose();
-  }, [subject, onDelete, reset, onClose]);
+  }, [subject, onDelete, weekdaySchedules, setSchedule, reset, onClose]);
 
   const updateSlot = useCallback((id: string, patch: Partial<LectureSlot>) => {
     setSlots((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
@@ -172,6 +258,82 @@ export default function EditSubjectModal({
                 style={{ fontFamily: "Poppins_400Regular" }}
               />
               {errors.code && <Text className="text-[#ff7648] text-xs mb-2">{errors.code}</Text>}
+
+              {/* Attendance (optional) */}
+              <Text className="text-text-muted text-xs mb-1 mt-3">
+                Attendance <Text className="text-text-muted text-xs font-normal">(optional)</Text>
+              </Text>
+              <View className="flex-row gap-3">
+                <View className="flex-1">
+                  <Text className="text-text-muted text-xs mb-1">Attended</Text>
+                  <TextInput
+                    value={attended}
+                    onChangeText={setAttended}
+                    placeholder="0"
+                    placeholderTextColor="#bcc1cd"
+                    keyboardType="number-pad"
+                    className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm"
+                    style={{ fontFamily: "Poppins_400Regular" }}
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-text-muted text-xs mb-1">Total</Text>
+                  <TextInput
+                    value={total}
+                    onChangeText={setTotal}
+                    placeholder="0"
+                    placeholderTextColor="#bcc1cd"
+                    keyboardType="number-pad"
+                    className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm"
+                    style={{ fontFamily: "Poppins_400Regular" }}
+                  />
+                </View>
+              </View>
+
+              {/* Room */}
+              <Text className="text-text-muted text-xs mb-1 mt-3">Room</Text>
+              <TextInput
+                value={room}
+                onChangeText={setRoom}
+                placeholder="e.g. LT-3"
+                placeholderTextColor="#bcc1cd"
+                className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm"
+                style={{ fontFamily: "Poppins_400Regular" }}
+              />
+
+              {/* Professor */}
+              <Text className="text-text-muted text-xs mb-1 mt-3">Professor</Text>
+              <TextInput
+                value={professor}
+                onChangeText={setProfessor}
+                placeholder="e.g. Dr. Smith"
+                placeholderTextColor="#bcc1cd"
+                className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm"
+                style={{ fontFamily: "Poppins_400Regular" }}
+              />
+
+              {locations.length > 0 && (
+                <>
+                  <Text className="text-text text-xs font-medium mb-1 mt-2">Location</Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    {locations.map((loc, idx) => {
+                      const selected = locationId === loc.id || (locationId === undefined && idx === 0);
+                      return (
+                        <TouchableOpacity
+                          key={loc.id}
+                          onPress={() => setLocationId(idx === 0 ? undefined : loc.id)}
+                          activeOpacity={0.7}
+                          className={`px-3 py-1.5 rounded-xl border ${selected ? "bg-[#4dc591]/15 border-[#4dc591]/30" : "bg-surface border-neutral-200"}`}
+                        >
+                          <Text className={`text-xs font-semibold ${selected ? "text-[#4dc591]" : "text-text-muted"}`}>
+                            {loc.name}{idx === 0 ? " (default)" : ""}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
             </View>
 
             {/* Lecture Slots */}
@@ -210,49 +372,22 @@ export default function EditSubjectModal({
                 <View className="flex-row gap-3 mb-3">
                   <View className="flex-1">
                     <Text className="text-text text-xs font-medium mb-1">Start Time</Text>
-                    <TextInput
+                    <TimePicker
                       value={slot.startTime}
-                      onChangeText={(t) => updateSlot(slot.id, { startTime: t })}
+                      onChange={(t) => updateSlot(slot.id, { startTime: t })}
                       placeholder="09:00"
-                      placeholderTextColor="#bcc1cd"
-                      keyboardType="numbers-and-punctuation"
-                      className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm"
-                      style={{ fontFamily: "Poppins_400Regular" }}
                     />
                   </View>
                   <View className="flex-1">
                     <Text className="text-text text-xs font-medium mb-1">End Time</Text>
-                    <TextInput
+                    <TimePicker
                       value={slot.endTime}
-                      onChangeText={(t) => updateSlot(slot.id, { endTime: t })}
+                      onChange={(t) => updateSlot(slot.id, { endTime: t })}
                       placeholder="10:00"
-                      placeholderTextColor="#bcc1cd"
-                      keyboardType="numbers-and-punctuation"
-                      className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm"
-                      style={{ fontFamily: "Poppins_400Regular" }}
                     />
                   </View>
                 </View>
 
-                <Text className="text-text text-xs font-medium mb-1">Room</Text>
-                <TextInput
-                  value={slot.room}
-                  onChangeText={(t) => updateSlot(slot.id, { room: t })}
-                  placeholder="e.g. LT-3"
-                  placeholderTextColor="#bcc1cd"
-                  className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm mb-3"
-                  style={{ fontFamily: "Poppins_400Regular" }}
-                />
-
-                <Text className="text-text text-xs font-medium mb-1">Professor</Text>
-                <TextInput
-                  value={slot.professor}
-                  onChangeText={(t) => updateSlot(slot.id, { professor: t })}
-                  placeholder="e.g. Dr. Smith"
-                  placeholderTextColor="#bcc1cd"
-                  className="bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-text text-sm"
-                  style={{ fontFamily: "Poppins_400Regular" }}
-                />
               </View>
             ))}
 

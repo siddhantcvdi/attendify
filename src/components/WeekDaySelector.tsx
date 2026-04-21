@@ -106,13 +106,14 @@ export default function WeekDaySelector({
   const flatListRef = useRef<FlatList>(null);
   const currentIndexRef = useRef(CENTER_INDEX);
 
+  // Re-scroll to correct index whenever listWidth settles or weekOffset changes
   useEffect(() => {
     const targetIndex = CENTER_INDEX + weekOffset;
-    if (targetIndex !== currentIndexRef.current) {
-      currentIndexRef.current = targetIndex;
-      flatListRef.current?.scrollToIndex({ index: targetIndex, animated: true });
+    currentIndexRef.current = targetIndex;
+    if (listWidth > 0) {
+      flatListRef.current?.scrollToIndex({ index: targetIndex, animated: false });
     }
-  }, [weekOffset]);
+  }, [weekOffset, listWidth]);
 
   const weekOffsets = React.useMemo(
     () => Array.from({ length: TOTAL_WEEKS }, (_, i) => i - WEEKS_BUFFER),
