@@ -14,12 +14,23 @@ type StatusOverrides = Record<string, AttendanceStatus>;
 type ScheduleTemplate = Omit<Lecture, "id" | "status">;
 type WeekdaySchedules = Record<number, ScheduleTemplate[]>;
 
-// Android 8+ requires a notification channel
+const FOREGROUND_CHANNEL_ID = "attendify-foreground";
+
+// Android 8+ requires notification channels
 if (Platform.OS === "android") {
+  // Attendance result notifications — high importance so they pop up
   Notifications.setNotificationChannelAsync(CHANNEL_ID, {
     name: "Attendance Checks",
     importance: Notifications.AndroidImportance.HIGH,
     sound: "default",
+  });
+  // Foreground service notification — low importance so it's silent and collapsed
+  Notifications.setNotificationChannelAsync(FOREGROUND_CHANNEL_ID, {
+    name: "Auto-Attendance Service",
+    importance: Notifications.AndroidImportance.LOW,
+    sound: null,
+    enableLights: false,
+    enableVibrate: false,
   });
 }
 
@@ -88,8 +99,8 @@ async function markAttendanceIfNeeded(
     const [h, m] = tmpl.startTime.split(":").map(Number);
     const startMinutes = h * 60 + m;
 
-    // Check window: from class start to 20 min after (covers bg fetch delays)
-    if (currentMinutes < startMinutes || currentMinutes > startMinutes + 20) continue;
+    // Check window: from class start to 15 min after (last scheduled check is at +10)
+    if (currentMinutes < startMinutes || currentMinutes > startMinutes + 15) continue;
 
     const lectureId = `lec-${dayOfWeek}-${index}`;
     const key = `${dk}:${lectureId}`;
@@ -146,6 +157,12 @@ async function markAttendanceIfNeeded(
  */
 export async function checkAndMarkAttendance(): Promise<void> {
   try {
+    // Restart foreground service if user dismissed the notification (Android 13+)
+    const locationRunning = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(() => false);
+    if (!locationRunning) {
+      await startAttendanceTracking().catch(() => {});
+    }
+
     // Use cached location only if < 3 min old; otherwise get a fresh fix
     const last = await Location.getLastKnownPositionAsync({ maxAge: 3 * 60 * 1000 });
     const pos = last ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -196,17 +213,16 @@ export async function scheduleWeekAhead(
     }
   }
 
-  const now = Date.now();
   const subjectMap = new Map(subjects.map((s) => [s.id, s.name]));
 
-  for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-    const date = new Date();
-    date.setDate(date.getDate() + dayOffset);
-    const dayOfWeek = date.getDay();
-    const templates = weekdaySchedules[dayOfWeek];
-    if (!templates || templates.length === 0) continue;
+  // Use WEEKLY triggers so notifications repeat indefinitely without rescheduling.
+  // dk is intentionally omitted from data — the listener computes it fresh on receipt.
+  // Three checks per class: at start, +5 min, +10 min.
+  const CHECK_OFFSETS = [0, 5, 10];
 
-    const dk = dateKey(date);
+  for (const [dayOfWeekStr, templates] of Object.entries(weekdaySchedules)) {
+    const dayOfWeek = Number(dayOfWeekStr);
+    if (!templates || templates.length === 0) continue;
 
     for (let index = 0; index < templates.length; index++) {
       const tmpl = templates[index];
@@ -215,23 +231,27 @@ export async function scheduleWeekAhead(
       const lectureId = `lec-${dayOfWeek}-${index}`;
       const subjectName = subjectMap.get(tmpl.subjectId) ?? tmpl.subjectName ?? "Class";
       const [h, m] = tmpl.startTime.split(":").map(Number);
+      const totalMinutes = h * 60 + m;
 
-      const content: Notifications.NotificationContentInput = {
-        title: "Attendify",
-        body: `Checking attendance for ${subjectName}`,
-        data: { lectureId, dk, subjectId: tmpl.subjectId },
-        categoryIdentifier: NOTIFICATION_CATEGORY,
-        sound: true,
-      };
+      // Expo weekday: 1 = Sunday … 7 = Saturday (JS getDay: 0 = Sunday … 6 = Saturday)
+      for (const offset of CHECK_OFFSETS) {
+        const fireMinutes = totalMinutes + offset;
+        const fireHour = Math.floor(fireMinutes / 60) % 24;
+        const fireMinute = fireMinutes % 60;
 
-      const startTime = new Date(date);
-      startTime.setHours(h, m, 0, 0);
-      if (startTime.getTime() > now) {
         await Notifications.scheduleNotificationAsync({
-          content,
+          content: {
+            title: "Attendify",
+            body: `Checking attendance for ${subjectName}`,
+            data: { lectureId, subjectId: tmpl.subjectId },
+            categoryIdentifier: NOTIFICATION_CATEGORY,
+            sound: false,
+          },
           trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DATE,
-            date: startTime,
+            type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+            weekday: dayOfWeek + 1,
+            hour: fireHour,
+            minute: fireMinute,
             channelId: CHANNEL_ID,
           },
         });
@@ -270,6 +290,7 @@ export async function startAttendanceTracking(): Promise<void> {
         notificationTitle: "Attendify",
         notificationBody: "Auto-attendance is active",
         notificationColor: "#4dc591",
+        notificationChannelId: FOREGROUND_CHANNEL_ID,
       },
     });
   }

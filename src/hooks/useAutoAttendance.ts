@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import * as Notifications from "expo-notifications";
 import { useProfile } from "../context/ProfileContext";
@@ -17,7 +17,7 @@ import {
 /**
  * Three layers of auto-attendance on Android:
  *
- * 1. Scheduled notifications (DATE trigger) — fire at exact class time.
+ * 1. Scheduled notifications (WEEKLY trigger) — fire at exact class time every week.
  *    The foreground service keeps the process alive so the in-process
  *    listener fires even when the app is backgrounded.
  *
@@ -32,6 +32,10 @@ export function useAutoAttendance() {
   const { setStatus, statusOverrides, reload: reloadAttendance } = useAttendance();
 
   const scheduleKey = JSON.stringify(weekdaySchedules);
+
+  // Keep a stable ref so the notification listener never needs statusOverrides as a dep
+  const statusOverridesRef = useRef(statusOverrides);
+  useEffect(() => { statusOverridesRef.current = statusOverrides; }, [statusOverrides]);
 
   // Start / stop background tracking
   useEffect(() => {
@@ -57,21 +61,21 @@ export function useAutoAttendance() {
     const sub = Notifications.addNotificationReceivedListener(async (n) => {
       if (n.request.content.categoryIdentifier !== NOTIFICATION_CATEGORY) return;
 
-      const { lectureId, dk, subjectId } =
-        (n.request.content.data as any) ?? {};
-      if (!lectureId || !dk || !subjectId) return;
-      if (statusOverrides[`${dk}:${lectureId}`] != null) return;
+      const { lectureId, subjectId } = (n.request.content.data as any) ?? {};
+      if (!lectureId || !subjectId) return;
 
-      // Run the check — this also writes to storage + sends result notification
+      // Compute dk fresh — notification data has no dk (WEEKLY triggers repeat forever)
+      const now = new Date();
+      const freshDk = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+      if (statusOverridesRef.current[`${freshDk}:${lectureId}`] != null) return;
+
       await checkAndMarkAttendance();
-
-      // Sync React context so UI reflects the change
       reloadAttendance().catch(() => {});
       reloadSubjects().catch(() => {});
     });
 
     return () => sub.remove();
-  }, [profile.autoAttendance, statusOverrides]);
+  }, [profile.autoAttendance]);
 
   // Reload context from storage when app returns to foreground
   // (picks up writes from background location/fetch tasks)
