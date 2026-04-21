@@ -84,9 +84,10 @@ export function useAutoAttendance() {
 
     const handleAppState = (next: AppStateStatus) => {
       if (next === "active") {
-        checkAndMarkAttendance().catch(() => {});
-        reloadAttendance().catch(() => {});
-        reloadSubjects().catch(() => {});
+        (async () => {
+          await checkAndMarkAttendance();
+          await Promise.all([reloadAttendance(), reloadSubjects()]);
+        })().catch(() => {});
       }
     };
 

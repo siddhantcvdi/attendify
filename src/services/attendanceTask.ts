@@ -8,6 +8,7 @@ import { NamedLocation, Subject, UserProfile, Lecture, AttendanceStatus } from "
 
 const LOCATION_TASK = "ATTENDIFY_LOCATION_TASK";
 const FETCH_TASK = "ATTENDIFY_FETCH_TASK";
+const NOTIFICATION_TASK = "ATTENDIFY_NOTIFICATION_TASK";
 const CHANNEL_ID = "attendify-attendance";
 
 type StatusOverrides = Record<string, AttendanceStatus>;
@@ -15,6 +16,7 @@ type ScheduleTemplate = Omit<Lecture, "id" | "status">;
 type WeekdaySchedules = Record<number, ScheduleTemplate[]>;
 
 const FOREGROUND_CHANNEL_ID = "attendify-foreground";
+export const NOTIFICATION_CATEGORY = "ATTENDIFY_AUTO_ATTENDANCE";
 
 // Android 8+ requires notification channels
 if (Platform.OS === "android") {
@@ -196,7 +198,23 @@ TaskManager.defineTask(FETCH_TASK, async () => {
   }
 });
 
-export const NOTIFICATION_CATEGORY = "ATTENDIFY_AUTO_ATTENDANCE";
+// Handles the first background notification reliably, even before React hooks mount.
+TaskManager.defineTask(NOTIFICATION_TASK, async ({ data, error }) => {
+  if (error) return;
+
+  const payload = data as {
+    notification?: Notifications.Notification;
+    request?: Notifications.NotificationRequest;
+  } | null;
+
+  const category =
+    payload?.notification?.request?.content?.categoryIdentifier ??
+    payload?.request?.content?.categoryIdentifier ??
+    null;
+
+  if (category && category !== NOTIFICATION_CATEGORY) return;
+  await checkAndMarkAttendance();
+});
 
 /**
  * Schedule notifications at exact class times for the next 7 days.
@@ -293,7 +311,6 @@ export async function startAttendanceTracking(): Promise<void> {
         notificationTitle: "Attendify",
         notificationBody: "Auto-attendance is active",
         notificationColor: "#4dc591",
-        notificationChannelId: FOREGROUND_CHANNEL_ID,
       },
     });
   }
@@ -305,6 +322,11 @@ export async function startAttendanceTracking(): Promise<void> {
       stopOnTerminate: false,
       startOnBoot: true,
     });
+  }
+
+  const notificationTaskRegistered = await TaskManager.isTaskRegisteredAsync(NOTIFICATION_TASK).catch(() => false);
+  if (!notificationTaskRegistered) {
+    await Notifications.registerTaskAsync(NOTIFICATION_TASK).catch(() => {});
   }
 }
 
@@ -320,5 +342,10 @@ export async function stopAttendanceTracking(): Promise<void> {
   const fetchRegistered = await TaskManager.isTaskRegisteredAsync(FETCH_TASK);
   if (fetchRegistered) {
     await BackgroundFetch.unregisterTaskAsync(FETCH_TASK);
+  }
+
+  const notificationTaskRegistered = await TaskManager.isTaskRegisteredAsync(NOTIFICATION_TASK).catch(() => false);
+  if (notificationTaskRegistered) {
+    await Notifications.unregisterTaskAsync(NOTIFICATION_TASK).catch(() => {});
   }
 }
