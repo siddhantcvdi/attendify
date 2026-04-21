@@ -111,7 +111,7 @@ async function markAttendanceIfNeeded(
     const subject = subjects.find((s) => s.id === tmpl.subjectId);
     const locationId = subject?.locationId;
     const loc: NamedLocation | undefined = locationId
-      ? profile.locations.find((l) => l.id === locationId)
+      ? (profile.locations.find((l) => l.id === locationId) ?? profile.locations[0])
       : profile.locations[0];
 
     if (!loc) continue;
@@ -163,9 +163,12 @@ export async function checkAndMarkAttendance(): Promise<void> {
       await startAttendanceTracking().catch(() => {});
     }
 
-    // Use cached location only if < 3 min old; otherwise get a fresh fix
-    const last = await Location.getLastKnownPositionAsync({ maxAge: 3 * 60 * 1000 });
-    const pos = last ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    // Use any cached location first — stationary users may not have triggered a fresh fix.
+    // Fall back to a live query only if there's truly nothing cached.
+    const last = await Location.getLastKnownPositionAsync();
+    const pos =
+      last ??
+      (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null));
     if (!pos) return;
     await markAttendanceIfNeeded(pos.coords.latitude, pos.coords.longitude);
   } catch {}
@@ -218,7 +221,7 @@ export async function scheduleWeekAhead(
   // Use WEEKLY triggers so notifications repeat indefinitely without rescheduling.
   // dk is intentionally omitted from data — the listener computes it fresh on receipt.
   // Three checks per class: at start, +5 min, +10 min.
-  const CHECK_OFFSETS = [0, 5, 10];
+  const CHECK_OFFSETS = [0, 5];
 
   for (const [dayOfWeekStr, templates] of Object.entries(weekdaySchedules)) {
     const dayOfWeek = Number(dayOfWeekStr);
